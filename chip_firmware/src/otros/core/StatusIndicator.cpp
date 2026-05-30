@@ -4,6 +4,7 @@
 
 #include "config/DeskConfig.h"
 #include "config/pins_config.h"
+#include "usb/DeskUSB.h"
 
 namespace
 {
@@ -22,8 +23,9 @@ namespace StatusIndicator
 
     void update()
     {
-        if (!ledEnabled)
+        if (!ledEnabled || !DeskUSB::cdcConnected(DeskUSB::CONTROL))
         {
+            ledOn = false;
             digitalWrite(STATUS_LED_PIN, HIGH);
             return;
         }

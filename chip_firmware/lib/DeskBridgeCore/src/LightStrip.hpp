@@ -8,7 +8,6 @@ class LightStrip
 {
 public:
     using Mode = StripLight::Mode;
-    using ButtonAction = StripLight::ButtonAction;
 
     void begin()
     {
@@ -55,21 +54,6 @@ public:
         StripLight::toggleMode();
     }
 
-    ButtonAction buttonAction(uint8_t index) const
-    {
-        return StripLight::buttonAction(index);
-    }
-
-    void setButtonAction(uint8_t index, ButtonAction action)
-    {
-        StripLight::setButtonAction(index, action);
-    }
-
-    const char *buttonActionName(ButtonAction action) const
-    {
-        return StripLight::buttonActionName(action);
-    }
-
     uint16_t brightness() const
     {
         return StripLight::brightness();
@@ -100,13 +84,4 @@ public:
         StripLight::setKelvinMix(value);
     }
 
-    uint16_t coldOutput() const
-    {
-        return StripLight::coldOutput();
-    }
-
-    uint16_t hotOutput() const
-    {
-        return StripLight::hotOutput();
-    }
 };

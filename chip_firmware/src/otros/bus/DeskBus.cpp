@@ -1,13 +1,13 @@
 #include "bus/DeskBus.h"
 
 #include <Adafruit_VEML7700.h>
-#include <AHTxx.h>
 #include <ScioSense_ENS160.h>
 #include <SensirionI2cScd4x.h>
 #include <SHTSensor.h>
 #include <SparkFun_External_EEPROM.h>
 #include <Wire.h>
 
+#include "bus/Aht21Sensor.h"
 #include "bus/BoardI2C.h"
 #include "config/DeskConfig.h"
 #include "config/pins_config.h"
@@ -26,10 +26,10 @@ namespace
     RTC_DS3231 rtc;
     ExternalEEPROM eeprom;
     uint8_t eepromAddress = 0x50;
-    ScioSense_ENS160 ens160Address0(&Wire, ENS160_I2CADDR_0);
-    ScioSense_ENS160 ens160Address1(&Wire, ENS160_I2CADDR_1);
+    ScioSense_ENS160 ens160Address0(&BoardI2C::sensorWire(), ENS160_I2CADDR_0);
+    ScioSense_ENS160 ens160Address1(&BoardI2C::sensorWire(), ENS160_I2CADDR_1);
     ScioSense_ENS160 *ens160 = &ens160Address0;
-    AHTxx aht21(AHTXX_ADDRESS_X38, AHT2x_SENSOR);
+    Aht21Sensor aht21;
     Adafruit_VEML7700 veml7700;
     SensirionI2cScd4x scd41;
     SHTSensor sht21(SHTSensor::SHT2X);
@@ -143,11 +143,16 @@ namespace
         }
 
         lastClimateMs = nowMs;
-        addPairSample(ahtAverage,
-                      validTemperature(aht21.readTemperature()),
-                      validHumidity(aht21.readHumidity(AHTXX_USE_READ_DATA)),
-                      cached.temperature,
-                      cached.humidity);
+        float temperature = NAN;
+        float humidity = NAN;
+        if (aht21.read(temperature, humidity))
+        {
+            addPairSample(ahtAverage,
+                          validTemperature(temperature),
+                          validHumidity(humidity),
+                          cached.temperature,
+                          cached.humidity);
+        }
     }
 
     void updateEns160(uint32_t nowMs)
@@ -267,12 +272,12 @@ namespace
                 continue;
             }
 
-            if (!BoardI2C::devicePresent(address))
+            if (!BoardI2C::devicePresent(BoardI2C::Bus::System, address))
             {
                 continue;
             }
 
-            if (eeprom.begin(address, Wire))
+            if (eeprom.begin(address, BoardI2C::systemWire()))
             {
                 eepromAddress = address;
                 return true;
@@ -295,7 +300,7 @@ namespace DeskBus
         initialized = true;
         BoardI2C::begin();
 
-        readyFlag(Device::DS3231) = rtc.begin(&Wire);
+        readyFlag(Device::DS3231) = rtc.begin(&BoardI2C::systemWire());
         if (readyFlag(Device::DS3231))
         {
             rtcPowerLost = rtc.lostPower();
@@ -314,11 +319,11 @@ namespace DeskBus
             eeprom.setWriteTimeMs(EEPROM_WRITE_TIME_MS_DEFAULT);
         }
 
-        if (BoardI2C::devicePresent(ENS160_I2CADDR_0))
+        if (BoardI2C::devicePresent(BoardI2C::Bus::Sensors, ENS160_I2CADDR_0))
         {
             ens160 = &ens160Address0;
         }
-        else if (BoardI2C::devicePresent(ENS160_I2CADDR_1))
+        else if (BoardI2C::devicePresent(BoardI2C::Bus::Sensors, ENS160_I2CADDR_1))
         {
             ens160 = &ens160Address1;
         }
@@ -329,17 +334,17 @@ namespace DeskBus
             readyFlag(Device::ENS160) = ens160->setMode(ENS160_OPMODE_STD);
         }
 
-        readyFlag(Device::AHT21) = aht21.begin(I2C_SDA_PIN, I2C_SCL_PIN);
+        readyFlag(Device::AHT21) = aht21.begin(BoardI2C::sensorWire());
 
-        readyFlag(Device::VEML7700) = veml7700.begin(&Wire);
+        readyFlag(Device::VEML7700) = veml7700.begin(&BoardI2C::sensorWire());
         if (readyFlag(Device::VEML7700))
         {
             veml7700.setGain(VEML7700_GAIN_1);
             veml7700.setIntegrationTime(VEML7700_IT_100MS);
         }
 
-        scd41.begin(Wire, SCD41_I2C_ADDR_62);
-        readyFlag(Device::SCD41) = BoardI2C::devicePresent(0x62);
+        scd41.begin(BoardI2C::sensorWire(), SCD41_I2C_ADDR_62);
+        readyFlag(Device::SCD41) = BoardI2C::devicePresent(BoardI2C::Bus::Sensors, 0x62);
         if (readyFlag(Device::SCD41))
         {
             scd41.stopPeriodicMeasurement();
@@ -347,7 +352,7 @@ namespace DeskBus
             readyFlag(Device::SCD41) = scd41.startPeriodicMeasurement() == 0;
         }
 
-        readyFlag(Device::SHT21) = sht21.init(Wire);
+        readyFlag(Device::SHT21) = sht21.init(BoardI2C::sensorWire());
     }
 
     void update()
@@ -457,12 +462,45 @@ namespace DeskBus
 
     bool devicePresent(uint8_t address)
     {
-        return BoardI2C::devicePresent(address);
+        return BoardI2C::devicePresent(BoardI2C::Bus::System, address) ||
+               BoardI2C::devicePresent(BoardI2C::Bus::Sensors, address);
     }
 
     uint8_t scan(uint8_t *addresses, uint8_t capacity)
     {
-        return BoardI2C::scan(addresses, capacity);
+        uint8_t found = BoardI2C::scan(BoardI2C::Bus::System, addresses, capacity);
+        uint8_t sensorAddresses[16] = {};
+        const uint8_t sensorFound = BoardI2C::scan(BoardI2C::Bus::Sensors, sensorAddresses, sizeof(sensorAddresses));
+
+        for (uint8_t sensorIndex = 0; sensorIndex < sensorFound && found < capacity; ++sensorIndex)
+        {
+            bool duplicate = false;
+            for (uint8_t existingIndex = 0; existingIndex < found; ++existingIndex)
+            {
+                if (addresses[existingIndex] == sensorAddresses[sensorIndex])
+                {
+                    duplicate = true;
+                    break;
+                }
+            }
+
+            if (!duplicate)
+            {
+                addresses[found++] = sensorAddresses[sensorIndex];
+            }
+        }
+
+        return found;
+    }
+
+    uint8_t scanSystem(uint8_t *addresses, uint8_t capacity)
+    {
+        return BoardI2C::scan(BoardI2C::Bus::System, addresses, capacity);
+    }
+
+    uint8_t scanSensors(uint8_t *addresses, uint8_t capacity)
+    {
+        return BoardI2C::scan(BoardI2C::Bus::Sensors, addresses, capacity);
     }
 
     const Measurements &measurements()

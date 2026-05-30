@@ -63,10 +63,6 @@ namespace
         settings.stripButtonRepeatMs = STRIP_BUTTON_REPEAT_MS_DEFAULT;
         settings.stripBrightnessStep = STRIP_BRIGHTNESS_STEP_DEFAULT;
         settings.stripKelvinStep = STRIP_KELVIN_STEP_DEFAULT;
-        settings.stripButtonAction0 = STRIP_BUTTON_0_ACTION_DEFAULT;
-        settings.stripButtonAction1 = STRIP_BUTTON_1_ACTION_DEFAULT;
-        settings.stripButtonAction2 = STRIP_BUTTON_2_ACTION_DEFAULT;
-        settings.stripButtonAction3 = STRIP_BUTTON_3_ACTION_DEFAULT;
         settings.displayTimeoutMs = DISPLAY_TIMEOUT_MS_DEFAULT;
         settings.sensorSampleIntervalMs = SENSOR_SAMPLE_INTERVAL_MS_DEFAULT;
         settings.sensorSampleCount = SENSOR_SAMPLE_COUNT_DEFAULT;
@@ -116,10 +112,6 @@ namespace
         settings.stripButtonRepeatMs = constrain(settings.stripButtonRepeatMs, STRIP_BUTTON_REPEAT_MS_MIN_DEFAULT, STRIP_BUTTON_REPEAT_MS_MAX_DEFAULT);
         settings.stripBrightnessStep = constrain(settings.stripBrightnessStep, STRIP_STEP_MIN_DEFAULT, STRIP_STEP_MAX_DEFAULT);
         settings.stripKelvinStep = constrain(settings.stripKelvinStep, STRIP_STEP_MIN_DEFAULT, STRIP_STEP_MAX_DEFAULT);
-        settings.stripButtonAction0 = settings.stripButtonAction0 > static_cast<uint8_t>(StripLight::ButtonAction::WarmChannel) ? STRIP_BUTTON_0_ACTION_DEFAULT : settings.stripButtonAction0;
-        settings.stripButtonAction1 = settings.stripButtonAction1 > static_cast<uint8_t>(StripLight::ButtonAction::WarmChannel) ? STRIP_BUTTON_1_ACTION_DEFAULT : settings.stripButtonAction1;
-        settings.stripButtonAction2 = settings.stripButtonAction2 > static_cast<uint8_t>(StripLight::ButtonAction::WarmChannel) ? STRIP_BUTTON_2_ACTION_DEFAULT : settings.stripButtonAction2;
-        settings.stripButtonAction3 = settings.stripButtonAction3 > static_cast<uint8_t>(StripLight::ButtonAction::WarmChannel) ? STRIP_BUTTON_3_ACTION_DEFAULT : settings.stripButtonAction3;
         settings.displayTimeoutMs = constrain(settings.displayTimeoutMs, DISPLAY_TIMEOUT_MS_MIN_DEFAULT, DISPLAY_TIMEOUT_MS_MAX_DEFAULT);
         settings.sensorSampleIntervalMs = constrain(settings.sensorSampleIntervalMs, SENSOR_SAMPLE_INTERVAL_MS_MIN_DEFAULT, SENSOR_SAMPLE_INTERVAL_MS_MAX_DEFAULT);
         settings.sensorSampleCount = constrain(settings.sensorSampleCount, SENSOR_SAMPLE_COUNT_MIN_DEFAULT, SENSOR_SAMPLE_COUNT_MAX_DEFAULT);
@@ -148,10 +140,6 @@ namespace
         StripLight::setButtonDuringTime(settings.stripButtonRepeatMs);
         StripLight::setBrightnessStep(settings.stripBrightnessStep);
         StripLight::setKelvinStep(settings.stripKelvinStep);
-        StripLight::setButtonAction(0, static_cast<StripLight::ButtonAction>(settings.stripButtonAction0));
-        StripLight::setButtonAction(1, static_cast<StripLight::ButtonAction>(settings.stripButtonAction1));
-        StripLight::setButtonAction(2, static_cast<StripLight::ButtonAction>(settings.stripButtonAction2));
-        StripLight::setButtonAction(3, static_cast<StripLight::ButtonAction>(settings.stripButtonAction3));
         switch (settings.stripMode)
         {
             case 0:
@@ -257,10 +245,6 @@ namespace DeskSettings
         settings.stripButtonRepeatMs = StripLight::buttonDuringTime();
         settings.stripBrightnessStep = StripLight::brightnessStep();
         settings.stripKelvinStep = StripLight::kelvinStep();
-        settings.stripButtonAction0 = static_cast<uint8_t>(StripLight::buttonAction(0));
-        settings.stripButtonAction1 = static_cast<uint8_t>(StripLight::buttonAction(1));
-        settings.stripButtonAction2 = static_cast<uint8_t>(StripLight::buttonAction(2));
-        settings.stripButtonAction3 = static_cast<uint8_t>(StripLight::buttonAction(3));
         sanitize();
     }
 

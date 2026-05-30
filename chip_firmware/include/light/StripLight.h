@@ -15,16 +15,6 @@ namespace StripLight
         Dual = Composite,
     };
 
-    enum class ButtonAction : uint8_t
-    {
-        None,
-        ToggleEnabled,
-        Brightness,
-        Kelvin,
-        ColdChannel,
-        WarmChannel,
-    };
-
     void begin();
     void update();
 
@@ -36,11 +26,6 @@ namespace StripLight
     void setMode(Mode value);
     void toggleMode();
     const char *modeName();
-
-    ButtonAction buttonAction(uint8_t index);
-    void setButtonAction(uint8_t index, ButtonAction action);
-    const char *buttonActionName(ButtonAction action);
-    uint8_t buttonCount();
 
     uint16_t brightness();
     void setBrightness(uint16_t value);
@@ -80,8 +65,6 @@ namespace StripLight
     uint16_t kelvinStep();
     void setKelvinStep(uint16_t value);
 
-    uint16_t coldOutput();
-    uint16_t hotOutput();
     uint16_t pwmMax();
     void resetDefaults();
 }

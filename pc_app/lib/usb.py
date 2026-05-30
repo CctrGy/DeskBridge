@@ -1,7 +1,8 @@
 """DeskBridge serial USB connection and wire protocol helpers.
 
-Windows exposes DeskBridge as one CDC ACM COM port.  The app uses this module
-to separate CONTROL and LOG traffic inside that single serial byte stream.
+Windows exposes DeskBridge as one CDC ACM COM port. The current firmware shell
+uses newline-terminated ASCII commands. The older framed helpers are kept here
+for compatibility with experiments that still use binary frames.
 """
 
 from __future__ import annotations
@@ -154,6 +155,69 @@ class DeskBridgeUSB:
 
     def __exit__(self, exc_type, exc_value, traceback) -> None:
         self.close()
+
+    def write_bytes(self, payload: bytes | bytearray | memoryview) -> None:
+        """Write raw bytes to the DeskBridge serial shell."""
+
+        port = self._require_connection()
+        port.write(bytes(payload))
+        port.flush()
+
+    def write_text(self, text: str, *, encoding: str = "ascii") -> None:
+        """Write raw text to the DeskBridge serial shell."""
+
+        self.write_bytes(text.encode(encoding))
+
+    def write_line(self, command: str = "", *, encoding: str = "ascii") -> None:
+        """Write one shell command terminated by newline."""
+
+        self.write_text(f"{command}\n", encoding=encoding)
+
+    def read_bytes(self, timeout: float | None = None) -> bytes:
+        """Read currently available raw serial bytes until timeout."""
+
+        port = self._require_connection()
+        deadline = None if timeout is None else monotonic() + timeout
+        chunks = bytearray()
+
+        while True:
+            waiting = port.in_waiting
+            chunk = port.read(waiting or 1)
+            if chunk:
+                chunks.extend(chunk)
+                continue
+
+            if deadline is None or monotonic() >= deadline:
+                return bytes(chunks)
+
+    def read_text(self, timeout: float | None = None, *, encoding: str = "ascii") -> str:
+        """Read raw serial text until timeout."""
+
+        return self.read_bytes(timeout=timeout).decode(encoding, errors="replace")
+
+    def read_until_prompt(
+        self,
+        prompt: str = "db>",
+        *,
+        timeout: float = 2.0,
+        encoding: str = "ascii",
+    ) -> str:
+        """Read shell text until the DeskBridge prompt appears or timeout passes."""
+
+        port = self._require_connection()
+        deadline = monotonic() + timeout
+        chunks = bytearray()
+        prompt_bytes = prompt.encode(encoding)
+
+        while monotonic() < deadline:
+            waiting = port.in_waiting
+            chunk = port.read(waiting or 1)
+            if chunk:
+                chunks.extend(chunk)
+                if prompt_bytes in chunks:
+                    break
+
+        return bytes(chunks).decode(encoding, errors="replace")
 
     def send_control(
         self,

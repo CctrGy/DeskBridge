@@ -42,6 +42,7 @@ namespace
         LightKelvinStep,
         BusMenu,
         BusScan,
+        BusSensorsMenu,
         BusDeviceStatus,
         RtcMenu,
         RtcSetTime,
@@ -54,6 +55,7 @@ namespace
         RtcAlarmNotification,
         RtcAlarmDelete,
         SystemMenu,
+        SystemBusScan,
         ChipInfo,
         DisplayTimeout,
         TemperatureUnit,
@@ -66,6 +68,12 @@ namespace
         SystemNotificationEdit,
         SystemNotificationDelete,
         SystemHomeViewMenu,
+    };
+
+    enum class ParentMenu : uint8_t
+    {
+        System,
+        Bus,
     };
 
     enum MainOption : uint8_t
@@ -123,15 +131,21 @@ namespace
     enum BusOption : uint8_t
     {
         BusScanOption,
-        BusDs3231,
-        BusAt24c32,
+        BusSensorsOption,
+        BusSettingsOption,
+        BusBack,
+        BusOptionCount,
+    };
+
+    enum BusSensorOption : uint8_t
+    {
         BusEns160,
         BusAht21,
         BusVeml7700,
         BusScd41,
         BusSht21,
-        BusBack,
-        BusOptionCount,
+        BusSensorBack,
+        BusSensorOptionCount,
     };
 
     enum RtcOption : uint8_t
@@ -163,9 +177,8 @@ namespace
     enum SystemOption : uint8_t
     {
         SystemDisplayTimeout,
-        SystemTemperatureUnit,
+        SystemScanBus,
         SystemChipInfo,
-        SystemSensors,
         SystemNotifications,
         SystemHomeView,
         SystemBack,
@@ -195,6 +208,7 @@ namespace
     {
         SystemSensorSampleInterval,
         SystemSensorSampleCount,
+        SystemSensorUnits,
         SystemSensorBack,
         SystemSensorOptionCount,
     };
@@ -271,9 +285,13 @@ namespace
     };
 
     const char *const busOptions[BusOptionCount] = {
-        "Scan bus",
-        "DS3231",
-        "AT24C32",
+        "Scan",
+        "Sensors",
+        "Settings",
+        "Back",
+    };
+
+    const char *const busSensorOptions[BusSensorOptionCount] = {
         "ENS160",
         "AHT21",
         "VEML7700",
@@ -304,9 +322,8 @@ namespace
 
     const char *const systemOptions[SystemOptionCount] = {
         "Display timeout",
-        "Temperature unit",
+        "Scan system bus",
         "Chip info",
-        "Sensores",
         "Notifications",
         "Home View",
         "Back",
@@ -315,6 +332,7 @@ namespace
     const char *const systemSensorOptions[SystemSensorOptionCount] = {
         "Sample interval",
         "Samples count",
+        "Units",
         "Back",
     };
 
@@ -381,6 +399,7 @@ namespace
     uint8_t selectedLightKelvin = LightKelvinValueOption;
     uint8_t selectedLightButton = LightButtonClickTimeOption;
     uint8_t selectedBus = BusScanOption;
+    uint8_t selectedBusSensor = BusEns160;
     uint8_t selectedRtc = RtcAdjustTime;
     uint8_t selectedRtcAlarm = RtcAlarmListOption;
     uint8_t selectedRtcAlarmEdit = RtcAlarmEditOptionItem;
@@ -389,6 +408,7 @@ namespace
     uint8_t selectedNotification = SystemNotificationBusAlarm;
     uint8_t selectedNotificationEdit = SystemNotificationEditOptionItem;
     uint8_t selectedHomeView = HomeViewBoxBig;
+    ParentMenu sensorConfigParent = ParentMenu::Bus;
 
     uint8_t scannedAddresses[12] = {};
     uint8_t scannedAddressCount = 0;
@@ -418,7 +438,9 @@ namespace
                 return homeRedrawIntervalMs;
             case Screen::UsbInfo:
             case Screen::ChipInfo:
+            case Screen::SystemBusScan:
             case Screen::BusMenu:
+            case Screen::BusSensorsMenu:
             case Screen::BusDeviceStatus:
             case Screen::RtcMenu:
             case Screen::SensorSampleInterval:
@@ -443,15 +465,11 @@ namespace
 
     bool anyBusDeviceMissing()
     {
-        for (uint8_t index = 0; index < static_cast<uint8_t>(DeskBus::Device::Count); ++index)
-        {
-            if (!DeskBus::ready(static_cast<DeskBus::Device>(index)))
-            {
-                return true;
-            }
-        }
-
-        return false;
+        return !DeskBus::ready(DeskBus::Device::ENS160) ||
+               !DeskBus::ready(DeskBus::Device::AHT21) ||
+               !DeskBus::ready(DeskBus::Device::VEML7700) ||
+               !DeskBus::ready(DeskBus::Device::SCD41) ||
+               !DeskBus::ready(DeskBus::Device::SHT21);
     }
 
     bool anyBusDeviceFault()
@@ -1105,10 +1123,6 @@ namespace
     {
         switch (option)
         {
-            case BusDs3231:
-                return DeskBus::ready(DeskBus::Device::DS3231);
-            case BusAt24c32:
-                return DeskBus::ready(DeskBus::Device::AT24C32);
             case BusEns160:
                 return DeskBus::ready(DeskBus::Device::ENS160);
             case BusAht21:
@@ -1128,10 +1142,6 @@ namespace
     {
         switch (option)
         {
-            case BusDs3231:
-                return "0x68";
-            case BusAt24c32:
-                return "0x50";
             case BusEns160:
                 return "0x52/0x53";
             case BusAht21:
@@ -1150,7 +1160,7 @@ namespace
     void drawBusMenu()
     {
         Oled.clearBuffer();
-        drawTitle("Bus");
+        drawTitle("Sensor bus");
 
         uint8_t first = 0;
         if (selectedBus >= DISPLAY_MENU_VISIBLE_ROWS_DEFAULT)
@@ -1170,12 +1180,45 @@ namespace
             }
 
             Oled.drawStr(4, y, busOptions[option]);
-            if (option > BusScanOption && option < BusBack)
+
+            if (option == selectedBus)
+            {
+                Oled.setDrawColor(1);
+            }
+        }
+
+        Oled.sendBuffer();
+    }
+
+    void drawBusSensorsMenu()
+    {
+        Oled.clearBuffer();
+        drawTitle("Sensors");
+
+        uint8_t first = 0;
+        if (selectedBusSensor >= DISPLAY_MENU_VISIBLE_ROWS_DEFAULT)
+        {
+            first = selectedBusSensor - (DISPLAY_MENU_VISIBLE_ROWS_DEFAULT - 1);
+        }
+
+        for (uint8_t row = 0; row < DISPLAY_MENU_VISIBLE_ROWS_DEFAULT && first + row < BusSensorOptionCount; ++row)
+        {
+            const uint8_t option = first + row;
+            const int y = 20 + row * 9;
+
+            if (option == selectedBusSensor)
+            {
+                Oled.drawBox(0, y - 7, 128, 9);
+                Oled.setDrawColor(0);
+            }
+
+            Oled.drawStr(4, y, busSensorOptions[option]);
+            if (option != BusSensorBack)
             {
                 Oled.drawStr(104, y, busDevicePresent(option) ? "OK" : "--");
             }
 
-            if (option == selectedBus)
+            if (option == selectedBusSensor)
             {
                 Oled.setDrawColor(1);
             }
@@ -1187,7 +1230,7 @@ namespace
     void drawBusDeviceStatus(uint8_t option)
     {
         Oled.clearBuffer();
-        drawTitle(busOptions[option]);
+        drawTitle(busSensorOptions[option]);
         Oled.setCursor(0, 24);
         Oled.print("Address: ");
         Oled.print(busDeviceAddress(option));
@@ -1256,10 +1299,10 @@ namespace
         Oled.sendBuffer();
     }
 
-    void drawI2cScan()
+    void drawI2cScan(const char *title)
     {
         Oled.clearBuffer();
-        drawTitle("Bus scan");
+        drawTitle(title);
         Oled.setCursor(0, 22);
         Oled.print("Found: ");
         Oled.print(scannedAddressCount);
@@ -1403,7 +1446,12 @@ namespace
 
     void scanI2c()
     {
-        scannedAddressCount = DeskBus::scan(scannedAddresses, sizeof(scannedAddresses));
+        scannedAddressCount = DeskBus::scanSensors(scannedAddresses, sizeof(scannedAddresses));
+    }
+
+    void scanSystemI2c()
+    {
+        scannedAddressCount = DeskBus::scanSystem(scannedAddresses, sizeof(scannedAddresses));
     }
 
     void goBack()
@@ -1449,6 +1497,7 @@ namespace
                 activeScreen = Screen::LightButtonsMenu;
                 break;
             case Screen::BusScan:
+            case Screen::BusSensorsMenu:
             case Screen::BusDeviceStatus:
                 activeScreen = Screen::BusMenu;
                 break;
@@ -1471,16 +1520,17 @@ namespace
                 activeScreen = Screen::RtcAlarmMenu;
                 break;
             case Screen::DisplayTimeout:
-            case Screen::TemperatureUnit:
+            case Screen::SystemBusScan:
             case Screen::ChipInfo:
-            case Screen::SystemSensorsMenu:
             case Screen::SystemNotificationsMenu:
             case Screen::SystemHomeViewMenu:
                 activeScreen = Screen::SystemMenu;
                 break;
-            case Screen::SensorSampleInterval:
-                activeScreen = Screen::SystemSensorsMenu;
+            case Screen::SystemSensorsMenu:
+                activeScreen = sensorConfigParent == ParentMenu::Bus ? Screen::BusMenu : Screen::SystemMenu;
                 break;
+            case Screen::TemperatureUnit:
+            case Screen::SensorSampleInterval:
             case Screen::SensorSampleCount:
                 activeScreen = Screen::SystemSensorsMenu;
                 break;
@@ -1592,6 +1642,21 @@ namespace
                     scanI2c();
                     activeScreen = Screen::BusScan;
                 }
+                else if (selectedBus == BusSensorsOption)
+                {
+                    activeScreen = Screen::BusSensorsMenu;
+                }
+                else if (selectedBus == BusSettingsOption)
+                {
+                    sensorConfigParent = ParentMenu::Bus;
+                    activeScreen = Screen::SystemSensorsMenu;
+                }
+                break;
+            case Screen::BusSensorsMenu:
+                if (selectedBusSensor == BusSensorBack)
+                {
+                    activeScreen = Screen::BusMenu;
+                }
                 else
                 {
                     activeScreen = Screen::BusDeviceStatus;
@@ -1663,17 +1728,14 @@ namespace
                 {
                     activeScreen = Screen::DisplayTimeout;
                 }
-                else if (selectedSystem == SystemTemperatureUnit)
+                else if (selectedSystem == SystemScanBus)
                 {
-                    activeScreen = Screen::TemperatureUnit;
+                    scanSystemI2c();
+                    activeScreen = Screen::SystemBusScan;
                 }
                 else if (selectedSystem == SystemChipInfo)
                 {
                     activeScreen = Screen::ChipInfo;
-                }
-                else if (selectedSystem == SystemSensors)
-                {
-                    activeScreen = Screen::SystemSensorsMenu;
                 }
                 else if (selectedSystem == SystemNotifications)
                 {
@@ -1687,11 +1749,15 @@ namespace
             case Screen::SystemSensorsMenu:
                 if (selectedSystemSensor == SystemSensorBack)
                 {
-                    activeScreen = Screen::SystemMenu;
+                    activeScreen = sensorConfigParent == ParentMenu::Bus ? Screen::BusMenu : Screen::SystemMenu;
                 }
                 else if (selectedSystemSensor == SystemSensorSampleCount)
                 {
                     activeScreen = Screen::SensorSampleCount;
+                }
+                else if (selectedSystemSensor == SystemSensorUnits)
+                {
+                    activeScreen = Screen::TemperatureUnit;
                 }
                 else
                 {
@@ -1747,6 +1813,9 @@ namespace
             case Screen::BusScan:
                 scanI2c();
                 break;
+            case Screen::SystemBusScan:
+                scanSystemI2c();
+                break;
             default:
                 break;
         }
@@ -1778,6 +1847,9 @@ namespace
                 break;
             case Screen::BusMenu:
                 moveSelection(selectedBus, BusOptionCount, delta);
+                break;
+            case Screen::BusSensorsMenu:
+                moveSelection(selectedBusSensor, BusSensorOptionCount, delta);
                 break;
             case Screen::RtcMenu:
                 moveSelection(selectedRtc, RtcOptionCount, delta);
@@ -1908,6 +1980,9 @@ namespace
             case Screen::BusMenu:
                 drawBusMenu();
                 break;
+            case Screen::BusSensorsMenu:
+                drawBusSensorsMenu();
+                break;
             case Screen::RtcMenu:
                 drawOptionList("RTC", rtcOptions, RtcOptionCount, selectedRtc);
                 break;
@@ -1924,7 +1999,7 @@ namespace
                 drawChipInfo();
                 break;
             case Screen::SystemSensorsMenu:
-                drawOptionList("Sensores", systemSensorOptions, SystemSensorOptionCount, selectedSystemSensor);
+                drawOptionList("Bus settings", systemSensorOptions, SystemSensorOptionCount, selectedSystemSensor);
                 break;
             case Screen::SystemNotificationsMenu:
                 drawOptionList("Notifications", notificationOptions, SystemNotificationOptionCount, selectedNotification);
@@ -1981,10 +2056,13 @@ namespace
                 drawRawEdit("Kelvin step", StripLight::kelvinStep(), "button hold step");
                 break;
             case Screen::BusScan:
-                drawI2cScan();
+                drawI2cScan("Sensor scan");
+                break;
+            case Screen::SystemBusScan:
+                drawI2cScan("System scan");
                 break;
             case Screen::BusDeviceStatus:
-                drawBusDeviceStatus(selectedBus);
+                drawBusDeviceStatus(selectedBusSensor);
                 break;
             case Screen::RtcSetTime:
                 drawRtcEditTime();

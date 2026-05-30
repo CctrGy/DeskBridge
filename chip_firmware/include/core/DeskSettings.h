@@ -26,10 +26,6 @@ namespace DeskSettings
         uint16_t stripButtonRepeatMs;
         uint16_t stripBrightnessStep;
         uint16_t stripKelvinStep;
-        uint8_t stripButtonAction0;
-        uint8_t stripButtonAction1;
-        uint8_t stripButtonAction2;
-        uint8_t stripButtonAction3;
 
         uint32_t displayTimeoutMs;
         uint32_t sensorSampleIntervalMs;

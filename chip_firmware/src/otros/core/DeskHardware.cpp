@@ -30,7 +30,8 @@ namespace DeskHardware
         OledPanel::showBootStatus("NeoPixel=OK");
 
         DeskBus::begin();
-        OledPanel::showBootStatus("Wire PB7/PB6");
+        OledPanel::showBootStatus("Sys PB7/PB6");
+        OledPanel::showBootStatus("Sens PB8/PA8");
         OledPanel::showBootStatus(DeskBus::ready(DeskBus::Device::DS3231) ? "DS3231=OK" : "DS3231=MISS");
         OledPanel::showBootStatus(DeskBus::ready(DeskBus::Device::AT24C32) ? "AT24C32=OK" : "AT24C32=MISS");
         OledPanel::showBootStatus(DeskBus::ready(DeskBus::Device::ENS160) ? "ENS160=OK" : "ENS160=MISS");

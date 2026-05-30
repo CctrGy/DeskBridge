@@ -3,10 +3,29 @@
 #include "core/DeskBridgeVersion.h"
 #include "core/DeskHardware.h"
 #include "USB.hpp"
+#include "libs.h"
+
+namespace
+{
+    Shell controlShell;
+
+    uint32_t shellRead(void *buffer, uint32_t length)
+    {
+        return USB.getCom().read(buffer, length);
+    }
+
+    uint32_t shellWrite(const void *buffer, uint32_t length)
+    {
+        const uint32_t written = USB.getCom().write(buffer, length);
+        DeskUSB::flush(DeskUSB::CONTROL);
+        return written;
+    }
+}
 
 void HardwareTask::begin()
 {
     USB.begin();
+    controlShell.begin(shellRead, shellWrite);
     DeskHardware::begin();
     heartbeat_.reset();
 }
@@ -17,6 +36,7 @@ void HardwareTask::update()
     ++cycles_;
 
     USB.task();
+    controlShell.update();
     DeskHardware::update();
 
     if (!identityLogged_ && USB.getCom().connected())
@@ -55,6 +75,6 @@ void HardwareTask::logHeartbeat()
 {
     if (heartbeat_.elapsed())
     {
-        USB.log("DeskBridge online\r\n");
+        // Keep the control CDC clean for request/response shell commands.
     }
 }

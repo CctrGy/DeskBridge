@@ -39,6 +39,8 @@ namespace DeskBus
     const char *addressText(Device device);
     bool devicePresent(uint8_t address);
     uint8_t scan(uint8_t *addresses, uint8_t capacity);
+    uint8_t scanSystem(uint8_t *addresses, uint8_t capacity);
+    uint8_t scanSensors(uint8_t *addresses, uint8_t capacity);
 
     const Measurements &measurements();
 
