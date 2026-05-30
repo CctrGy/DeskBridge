@@ -1,0 +1,4 @@
+pc_app/.venv/
+pc_app/**/__pycache__/
+pc_app/**/*.py[cod]
+_external_examples/
