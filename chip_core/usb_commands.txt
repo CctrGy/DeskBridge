@@ -1,0 +1,155 @@
+DeskBridge USB Serial Command Shell
+===================================
+
+Canal:
+- Puerto Serial USB principal del firmware.
+- Prompt del dispositivo: db>
+- Comandos en texto plano ASCII, terminados con salto de linea.
+- Respuestas legibles en texto plano.
+- OK indica cambio aplicado.
+- ERR indica comando incorrecto, argumento invalido o dispositivo no disponible.
+
+
+Comandos basicos
+================
+
+help
+  Lista minima de variantes de comandos soportadas.
+
+ping
+  Comprueba si el firmware responde.
+  Respuesta: pong
+
+info?
+  Informacion general del dispositivo: firmware, protocolo, USB, CDC y uptime.
+
+usb?
+  Informacion USB: VID, PID, bcdDevice, mounted, VBUS, ID y estado CDC.
+
+program?
+  Informacion del programa cargado: nombre, version, semver, protocolo y build.
+
+
+Sistema
+=======
+
+sys?
+sys local
+  Informacion local del chip: modelo, frecuencia, temperatura interna, VDDA,
+  razon de reset y uptime.
+
+sys periferics
+sys peripherals
+  Estado de perifericos de sistema: DS3231, AT24C32 y Keypad.
+
+reset
+reset peripherals
+  Fuerza reset de los perifericos conocidos. Actualmente resetea Keypad.
+
+reset keypad
+  Fuerza reset solo del chip Keypad.
+
+reset settings
+  Restaura configuracion EEPROM a valores por defecto y sincroniza Keypad.
+
+reset core
+reset mcu
+  Reinicia el microcontrolador CORE. El puerto USB se desconecta unos segundos.
+
+
+Bus de sensores
+===============
+
+bus?
+  Estado general del bus de sensores, time_read, samples y sensores.
+
+bus scan
+  Escanea el bus I2C de sensores y lista direcciones encontradas.
+
+bus time_read
+bus time_read [value]
+  Lee o configura el intervalo de lectura de sensores.
+  Formatos aceptados: 1000, 1000ms, 1.5s.
+
+bus samples
+bus samples [value]
+  Lee o configura el numero de muestras para promedio.
+
+bus sensor
+  Lista sensores disponibles.
+
+bus sensor [sel]
+  Muestra estado y ultima medicion de un sensor.
+  Selectores validos: 0..4, ENS160, AHT21, VEML7700, SCD41, SHT21.
+
+
+RTC
+===
+
+rtc?
+  Estado del RTC DS3231 y flag lost_power.
+
+rtc get
+  Muestra fecha y hora: YYYY-MM-DDTHH:MM:SS.
+
+rtc set [value]
+  Ajusta fecha y hora.
+  Formatos:
+    YYYY-MM-DDTHH:MM:SS
+    YYYY-MM-DD_HH:MM:SS
+
+
+Luz / Keypad
+===============
+
+light?
+  Muestra configuracion de luz, estado de Keypad, PWM y consumo.
+
+light enabled [on|off|1|0]
+  Habilita o deshabilita la tira.
+
+light mode [0|1|2|one|two|composite]
+  Configura modo:
+    0 / one        = OneSimple
+    1 / two        = TwoSimple
+    2 / composite  = Composite
+
+light brightness [0..65535]
+  Configura brillo en PWM 16-bit.
+
+light kelvin [0..65535]
+  Configura mezcla de blancos: 0 caliente, 65535 frio.
+
+light cold_min [0..65535]
+light cold_max [0..65535]
+light warm_min [0..65535]
+light warm_max [0..65535]
+  Configura limites PWM de cada canal blanco.
+
+light click [ms]
+light long [ms]
+light repeat [ms]
+  Configura tiempos de botones gestionados por Keypad.
+
+light brightness_step [1..8192]
+light kelvin_step [1..8192]
+  Configura pasos de ajuste.
+
+light power
+  Lee consumo monitorizado por Keypad: corriente, voltaje y ADC raw.
+
+light sync
+  Reenvia toda la configuracion de luz actual al chip Keypad.
+
+keypad?
+  Vista resumida del chip Keypad.
+
+
+Comandos eliminados
+===================
+
+sensor?
+sensor [sel]
+  Eliminados como comandos raiz. Usar:
+    bus sensor
+    bus sensor [sel]

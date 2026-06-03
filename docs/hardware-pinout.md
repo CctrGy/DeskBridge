@@ -1,13 +1,10 @@
 # DeskBridge STM32F401 pinout
 
-## Strip dual white
+## Local board inputs
 
 | Signal | Pin |
 | --- | --- |
-| Cold white PWM | PB8 |
-| Warm white PWM | PB9 |
-| Brightness button | PC14 |
-| Kelvin button | PC15 |
+| KEY | PA0 |
 
 ## NeoPixel
 
@@ -38,8 +35,24 @@
 
 | Signal | Pin |
 | --- | --- |
-| SDA | PB7 |
-| SCL | PB6 |
+| SDA | PB9 |
+| SCL | PB8 |
 
-The shared I2C bus is intended for DS3231, AT24C32, ENS160+AHT21, VEML7700,
-SCD41, and SHT21 modules.
+The shared physical I2C bus is intended for DS3231, AT24C32,
+ENS160+AHT21, VEML7700, SCD41, and SHT21 modules. Firmware still keeps
+`System` and `Sensors` as logical buses.
+
+## Keypad UART
+
+| Signal | Pin |
+| --- | --- |
+| UART1 RX | PB7 |
+| UART1 TX | PB6 |
+| Event input, unused for now | PB5 |
+
+## USB state
+
+| Signal | Pin |
+| --- | --- |
+| USB VBUS | PA9 |
+| USB ID | PA10 |
