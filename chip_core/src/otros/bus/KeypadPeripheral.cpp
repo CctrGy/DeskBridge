@@ -1,12 +1,15 @@
 #include "bus/KeypadPeripheral.h"
 
 #include <Arduino.h>
-#include <stdlib.h>
 #include <string.h>
+
+#include <KeypadProtocol.h>
 
 #include "config/DeskConfig.h"
 #include "config/pins_config.h"
 #include "light/StripLight.h"
+
+namespace Protocol = DeskBridgeKeypadProtocol;
 
 namespace
 {
@@ -33,10 +36,7 @@ namespace
     void clearInput()
     {
 #if KEYPAD_UART_CONFIGURED
-        while (keypadSerial.available() > 0)
-        {
-            keypadSerial.read();
-        }
+        Protocol::clearInput(keypadSerial);
 #endif
     }
 
@@ -47,34 +47,7 @@ namespace
         (void)capacity;
         return false;
 #else
-        uint8_t length = 0;
-        const uint32_t startMs = millis();
-
-        while (millis() - startMs < KEYPAD_UART_TIMEOUT_MS_DEFAULT)
-        {
-            while (keypadSerial.available() > 0)
-            {
-                const char value = static_cast<char>(keypadSerial.read());
-                if (value == '\r')
-                {
-                    continue;
-                }
-
-                if (value == '\n')
-                {
-                    buffer[length] = '\0';
-                    return length > 0;
-                }
-
-                if (length + 1 < capacity)
-                {
-                    buffer[length++] = value;
-                }
-            }
-        }
-
-        buffer[0] = '\0';
-        return false;
+        return Protocol::readLine(keypadSerial, buffer, capacity, KEYPAD_UART_TIMEOUT_MS_DEFAULT);
 #endif
     }
 
@@ -86,17 +59,7 @@ namespace
         (void)responseCapacity;
         return false;
 #else
-        clearInput();
-        keypadSerial.print(line);
-        keypadSerial.print('\n');
-        keypadSerial.flush();
-
-        if (!readLine(response, responseCapacity))
-        {
-            return false;
-        }
-
-        return strncmp(response, "OK", 2) == 0;
+        return Protocol::sendLine(keypadSerial, line, response, responseCapacity, KEYPAD_UART_TIMEOUT_MS_DEFAULT);
 #endif
     }
 
@@ -109,56 +72,15 @@ namespace
     bool sendCommandValue(const char *prefix, uint16_t value)
     {
         char command[20] = {};
-        snprintf(command, sizeof(command), "%s%u", prefix, value);
+        Protocol::formatValueCommand(command, sizeof(command), prefix, value);
         return sendCommand(command);
     }
 
-    bool stringForKey(const char *line, const char *key, char *value, uint8_t valueCapacity)
+    bool sendCommandBool(const char *prefix, bool value)
     {
-        if (valueCapacity == 0)
-        {
-            return false;
-        }
-
-        const char *cursor = strstr(line, key);
-        if (cursor == nullptr)
-        {
-            return false;
-        }
-
-        cursor += strlen(key);
-        uint8_t index = 0;
-        while (*cursor != '\0' && *cursor != ' ' && index + 1 < valueCapacity)
-        {
-            value[index++] = *cursor++;
-        }
-        value[index] = '\0';
-        return index > 0;
-    }
-
-    bool valueForKey(const char *line, const char *key, long &value)
-    {
-        const char *cursor = strstr(line, key);
-        if (cursor == nullptr)
-        {
-            return false;
-        }
-
-        cursor += strlen(key);
-        value = strtol(cursor, nullptr, 10);
-        return true;
-    }
-
-    bool boolForKey(const char *line, const char *key, bool &value)
-    {
-        long numeric = 0;
-        if (!valueForKey(line, key, numeric))
-        {
-            return false;
-        }
-
-        value = numeric != 0;
-        return true;
+        char command[20] = {};
+        Protocol::formatBoolCommand(command, sizeof(command), prefix, value);
+        return sendCommand(command);
     }
 
     void parseStripResponse(const char *response)
@@ -166,63 +88,63 @@ namespace
         long numeric = 0;
         bool enabled = false;
 
-        if (boolForKey(response, "EN=", enabled))
+        if (Protocol::boolForKey(response, Protocol::Field::Enabled, enabled))
         {
             current.stripEnabled = enabled;
         }
-        if (valueForKey(response, "MODE=", numeric))
+        if (Protocol::valueForKey(response, Protocol::Field::Mode, numeric))
         {
             current.stripMode = static_cast<uint8_t>(numeric);
         }
-        if (valueForKey(response, "VAL=", numeric))
+        if (Protocol::valueForKey(response, Protocol::Field::Brightness, numeric))
         {
             current.brightness = static_cast<uint16_t>(numeric);
         }
-        if (valueForKey(response, "KEL=", numeric))
+        if (Protocol::valueForKey(response, Protocol::Field::Kelvin, numeric))
         {
             current.kelvin = static_cast<uint16_t>(numeric);
         }
-        if (valueForKey(response, "CMIN=", numeric))
+        if (Protocol::valueForKey(response, Protocol::Field::ColdMin, numeric))
         {
             current.coldMin = static_cast<uint16_t>(numeric);
         }
-        if (valueForKey(response, "CMAX=", numeric))
+        if (Protocol::valueForKey(response, Protocol::Field::ColdMax, numeric))
         {
             current.coldMax = static_cast<uint16_t>(numeric);
         }
-        if (valueForKey(response, "WMIN=", numeric))
+        if (Protocol::valueForKey(response, Protocol::Field::WarmMin, numeric))
         {
             current.warmMin = static_cast<uint16_t>(numeric);
         }
-        if (valueForKey(response, "WMAX=", numeric))
+        if (Protocol::valueForKey(response, Protocol::Field::WarmMax, numeric))
         {
             current.warmMax = static_cast<uint16_t>(numeric);
         }
-        if (valueForKey(response, "BSTEP=", numeric))
+        if (Protocol::valueForKey(response, Protocol::Field::BrightnessStep, numeric))
         {
             current.brightnessStep = static_cast<uint16_t>(numeric);
         }
-        if (valueForKey(response, "KSTEP=", numeric))
+        if (Protocol::valueForKey(response, Protocol::Field::KelvinStep, numeric))
         {
             current.kelvinStep = static_cast<uint16_t>(numeric);
         }
-        if (valueForKey(response, "CT=", numeric))
+        if (Protocol::valueForKey(response, Protocol::Field::ClickMs, numeric))
         {
             current.clickMs = static_cast<uint16_t>(numeric);
         }
-        if (valueForKey(response, "LT=", numeric))
+        if (Protocol::valueForKey(response, Protocol::Field::LongMs, numeric))
         {
             current.longMs = static_cast<uint16_t>(numeric);
         }
-        if (valueForKey(response, "RT=", numeric))
+        if (Protocol::valueForKey(response, Protocol::Field::RepeatMs, numeric))
         {
             current.repeatMs = static_cast<uint16_t>(numeric);
         }
-        if (valueForKey(response, "PWM_C=", numeric))
+        if (Protocol::valueForKey(response, Protocol::Field::PwmCold, numeric))
         {
             current.pwmCold = static_cast<uint16_t>(numeric);
         }
-        if (valueForKey(response, "PWM_W=", numeric))
+        if (Protocol::valueForKey(response, Protocol::Field::PwmWarm, numeric))
         {
             current.pwmWarm = static_cast<uint16_t>(numeric);
         }
@@ -232,23 +154,23 @@ namespace
     {
         long numeric = 0;
 
-        if (valueForKey(response, "MA=", numeric))
+        if (Protocol::valueForKey(response, Protocol::Field::CurrentMa, numeric))
         {
             current.currentMa = static_cast<int16_t>(numeric);
         }
-        if (valueForKey(response, "RAW=", numeric))
+        if (Protocol::valueForKey(response, Protocol::Field::CurrentRaw, numeric))
         {
             current.currentRaw = static_cast<uint16_t>(numeric);
         }
-        if (valueForKey(response, "MV=", numeric))
+        if (Protocol::valueForKey(response, Protocol::Field::SupplyMv, numeric))
         {
             current.supplyMv = static_cast<uint16_t>(numeric);
         }
-        if (valueForKey(response, "VRAW=", numeric))
+        if (Protocol::valueForKey(response, Protocol::Field::VoltageRaw, numeric))
         {
             current.voltageRaw = static_cast<uint16_t>(numeric);
         }
-        if (valueForKey(response, "MW=", numeric))
+        if (Protocol::valueForKey(response, Protocol::Field::PowerMw, numeric))
         {
             current.powerMw = static_cast<uint32_t>(numeric);
         }
@@ -256,34 +178,34 @@ namespace
 
     void parseInfoResponse(const char *response)
     {
-        stringForKey(response, "PROTO=", current.protocolText, sizeof(current.protocolText));
+        Protocol::stringForKey(response, Protocol::Field::Protocol, current.protocolText, sizeof(current.protocolText));
     }
 
     void parseEventResponse(const char *response)
     {
         long numeric = 0;
 
-        if (valueForKey(response, "EVT=", numeric))
+        if (Protocol::valueForKey(response, Protocol::Field::Events, numeric))
         {
             current.events = static_cast<uint16_t>(numeric);
         }
-        if (valueForKey(response, "BP=", numeric))
+        if (Protocol::valueForKey(response, Protocol::Field::ButtonPressed, numeric))
         {
             current.buttonPressedMask = static_cast<uint8_t>(numeric);
         }
-        if (valueForKey(response, "BR=", numeric))
+        if (Protocol::valueForKey(response, Protocol::Field::ButtonReleased, numeric))
         {
             current.buttonReleasedMask = static_cast<uint8_t>(numeric);
         }
-        if (valueForKey(response, "BD=", numeric))
+        if (Protocol::valueForKey(response, Protocol::Field::ButtonDown, numeric))
         {
             current.buttonDownMask = static_cast<uint8_t>(numeric);
         }
-        if (valueForKey(response, "LB=", numeric))
+        if (Protocol::valueForKey(response, Protocol::Field::LastButton, numeric))
         {
             current.lastButton = static_cast<uint8_t>(numeric);
         }
-        if (valueForKey(response, "BE=", numeric))
+        if (Protocol::valueForKey(response, Protocol::Field::ButtonEdge, numeric))
         {
             current.lastButtonEdge = static_cast<uint8_t>(numeric);
         }
@@ -299,7 +221,8 @@ namespace
     void parseActionResponse(const char *response)
     {
         char action[9] = {};
-        if (stringForKey(response, "ACT=", action, sizeof(action)) && strcmp(action, "NONE") != 0)
+        if (Protocol::stringForKey(response, Protocol::Field::Action, action, sizeof(action)) &&
+            strcmp(action, Protocol::Response::ActionNone) != 0)
         {
             strncpy(current.lastAction, action, sizeof(current.lastAction) - 1);
             current.lastAction[sizeof(current.lastAction) - 1] = '\0';
@@ -314,7 +237,7 @@ namespace
         for (uint8_t index = 0; index < 5; ++index)
         {
             snprintf(key, sizeof(key), "B%u=", index);
-            if (valueForKey(response, key, numeric))
+            if (Protocol::valueForKey(response, key, numeric))
             {
                 current.buttonAssignments[index] = static_cast<uint8_t>(numeric);
             }
@@ -390,34 +313,34 @@ namespace KeypadPeripheral
     void update()
     {
         char response[160] = {};
-        current.present = sendLine("PING", response, sizeof(response));
+        current.present = sendLine(Protocol::Command::Ping, response, sizeof(response));
         if (!current.present)
         {
             current.protocol = 0;
             return;
         }
 
-        current.protocol = KEYPAD_PROTOCOL_VERSION_DEFAULT;
+        current.protocol = Protocol::ProtocolVersion;
         current.statePin = digitalRead(KEYPAD_STATE_PIN) == HIGH;
 
-        if (sendLine("INF?", response, sizeof(response)))
+        if (sendLine(Protocol::Command::Info, response, sizeof(response)))
         {
             parseInfoResponse(response);
         }
 
         serviceEvents();
 
-        if (sendLine("STR?", response, sizeof(response)))
+        if (sendLine(Protocol::Command::Strip, response, sizeof(response)))
         {
             parseStripResponse(response);
         }
 
-        if (sendLine("PWR?", response, sizeof(response)))
+        if (sendLine(Protocol::Command::Power, response, sizeof(response)))
         {
             parsePowerResponse(response);
         }
 
-        if (sendLine("BAS?", response, sizeof(response)))
+        if (sendLine(Protocol::Command::ButtonAssignments, response, sizeof(response)))
         {
             parseButtonAssignmentsResponse(response);
         }
@@ -436,7 +359,7 @@ namespace KeypadPeripheral
         interrupts();
 
         char response[160] = {};
-        if (!sendLine("EVT?", response, sizeof(response)))
+        if (!sendLine(Protocol::Command::Events, response, sizeof(response)))
         {
             current.present = false;
             return;
@@ -447,7 +370,7 @@ namespace KeypadPeripheral
 
         if ((current.events & EventCoreCommand) != 0)
         {
-            if (sendLine("ACT?", response, sizeof(response)))
+            if (sendLine(Protocol::Command::Action, response, sizeof(response)))
             {
                 parseActionResponse(response);
             }
@@ -505,7 +428,7 @@ namespace KeypadPeripheral
 
     void clearEvents()
     {
-        sendCommand("SCL");
+        sendCommand(Protocol::Command::ClearEvents);
         current.events = 0;
         current.status &= ~0x02;
     }
@@ -515,17 +438,17 @@ namespace KeypadPeripheral
         switch (commandValue)
         {
             case 1:
-                return sendCommand("SCL");
+                return sendCommand(Protocol::Command::ClearEvents);
             case 2:
-                return sendCommand("SRD");
+                return sendCommand(Protocol::Command::ResetDefaults);
             case 3:
-                return sendCommand(current.stripEnabled ? "SSE0" : "SSE1");
+                return sendCommandBool(Protocol::Prefix::SetEnabled, !current.stripEnabled);
             case 4:
-                return sendCommand("SSK0");
+                return sendCommandValue(Protocol::Prefix::SetKelvin, 0);
             case 5:
-                return sendCommandValue("SSK", StripLight::pwmMax() / 2);
+                return sendCommandValue(Protocol::Prefix::SetKelvin, StripLight::pwmMax() / 2);
             case 6:
-                return sendCommandValue("SSK", StripLight::pwmMax());
+                return sendCommandValue(Protocol::Prefix::SetKelvin, StripLight::pwmMax());
             default:
                 return false;
         }
@@ -536,27 +459,27 @@ namespace KeypadPeripheral
         switch (regLow)
         {
             case 0x08:
-                return sendCommandValue("SSV", value);
+                return sendCommandValue(Protocol::Prefix::SetBrightness, value);
             case 0x0A:
-                return sendCommandValue("SSK", value);
+                return sendCommandValue(Protocol::Prefix::SetKelvin, value);
             case 0x0C:
-                return sendCommandValue("SCN", value);
+                return sendCommandValue(Protocol::Prefix::SetColdMin, value);
             case 0x0E:
-                return sendCommandValue("SCX", value);
+                return sendCommandValue(Protocol::Prefix::SetColdMax, value);
             case 0x10:
-                return sendCommandValue("SWN", value);
+                return sendCommandValue(Protocol::Prefix::SetWarmMin, value);
             case 0x12:
-                return sendCommandValue("SWX", value);
+                return sendCommandValue(Protocol::Prefix::SetWarmMax, value);
             case 0x14:
-                return sendCommandValue("SBS", value);
+                return sendCommandValue(Protocol::Prefix::SetBrightnessStep, value);
             case 0x16:
-                return sendCommandValue("SKS", value);
+                return sendCommandValue(Protocol::Prefix::SetKelvinStep, value);
             case 0x1A:
-                return sendCommandValue("SCT", value);
+                return sendCommandValue(Protocol::Prefix::SetClickMs, value);
             case 0x1C:
-                return sendCommandValue("SLT", value);
+                return sendCommandValue(Protocol::Prefix::SetLongMs, value);
             case 0x1E:
-                return sendCommandValue("SRT", value);
+                return sendCommandValue(Protocol::Prefix::SetRepeatMs, value);
             default:
                 return false;
         }
@@ -571,7 +494,7 @@ namespace KeypadPeripheral
 
         char commandBuffer[16] = {};
         char response[48] = {};
-        snprintf(commandBuffer, sizeof(commandBuffer), "BSA%u,%u", buttonIndex, actionId);
+        Protocol::formatButtonAssignmentCommand(commandBuffer, sizeof(commandBuffer), buttonIndex, actionId);
         if (!sendLine(commandBuffer, response, sizeof(response)))
         {
             return false;
@@ -584,19 +507,19 @@ namespace KeypadPeripheral
     bool syncStripConfig()
     {
         bool ok = true;
-        ok &= sendCommand(StripLight::enabled() ? "SSE1" : "SSE0");
-        ok &= sendCommandValue("SSM", stripModeForKeypad());
-        ok &= sendCommandValue("SSV", StripLight::brightness());
-        ok &= sendCommandValue("SSK", StripLight::kelvinMix());
-        ok &= sendCommandValue("SCN", StripLight::coldMin());
-        ok &= sendCommandValue("SCX", StripLight::coldMax());
-        ok &= sendCommandValue("SWN", StripLight::hotMin());
-        ok &= sendCommandValue("SWX", StripLight::hotMax());
-        ok &= sendCommandValue("SBS", StripLight::brightnessStep());
-        ok &= sendCommandValue("SKS", StripLight::kelvinStep());
-        ok &= sendCommandValue("SCT", StripLight::buttonClickTime());
-        ok &= sendCommandValue("SLT", StripLight::buttonLongTime());
-        ok &= sendCommandValue("SRT", StripLight::buttonDuringTime());
+        ok &= sendCommandBool(Protocol::Prefix::SetEnabled, StripLight::enabled());
+        ok &= sendCommandValue(Protocol::Prefix::SetMode, stripModeForKeypad());
+        ok &= sendCommandValue(Protocol::Prefix::SetBrightness, StripLight::brightness());
+        ok &= sendCommandValue(Protocol::Prefix::SetKelvin, StripLight::kelvinMix());
+        ok &= sendCommandValue(Protocol::Prefix::SetColdMin, StripLight::coldMin());
+        ok &= sendCommandValue(Protocol::Prefix::SetColdMax, StripLight::coldMax());
+        ok &= sendCommandValue(Protocol::Prefix::SetWarmMin, StripLight::hotMin());
+        ok &= sendCommandValue(Protocol::Prefix::SetWarmMax, StripLight::hotMax());
+        ok &= sendCommandValue(Protocol::Prefix::SetBrightnessStep, StripLight::brightnessStep());
+        ok &= sendCommandValue(Protocol::Prefix::SetKelvinStep, StripLight::kelvinStep());
+        ok &= sendCommandValue(Protocol::Prefix::SetClickMs, StripLight::buttonClickTime());
+        ok &= sendCommandValue(Protocol::Prefix::SetLongMs, StripLight::buttonLongTime());
+        ok &= sendCommandValue(Protocol::Prefix::SetRepeatMs, StripLight::buttonDuringTime());
         update();
         return ok;
     }

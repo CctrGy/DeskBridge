@@ -5,9 +5,19 @@ Canal:
 - Puerto Serial USB principal del firmware.
 - Prompt del dispositivo: db>
 - Comandos en texto plano ASCII, terminados con salto de linea.
-- Respuestas legibles en texto plano.
-- OK indica cambio aplicado.
+- Respuestas legibles en texto plano con formato de lista:
+  grupo: clave:valor, clave:valor, ...
+- Las respuestas de consulta no usan cabeceras tipo [usb].
+- ok: indica cambio aplicado.
 - ERR indica comando incorrecto, argumento invalido o dispositivo no disponible.
+
+Ejemplos de respuesta:
+
+program: name:DeskBridge chip_core, firmware:0.3.0, version:0.3.0, protocol:3, build:1760000000
+usb: vid:0x1209, pid:0xDB01, bcd:0x0300, mounted:yes, vbus:yes, id:floating, cdc:open
+device: name:DS3231, addr:0x68, state:ok
+sensor_data: name:AHT21, temp_c:24.2, humidity_pct:45.3
+ok: light.updated:done
 
 
 Comandos basicos
@@ -18,16 +28,19 @@ help
 
 ping
   Comprueba si el firmware responde.
-  Respuesta: pong
+  Respuesta: ping: state:pong
 
 info?
-  Informacion general del dispositivo: firmware, protocolo, USB, CDC y uptime.
+  Informacion general del dispositivo.
+  Respuesta: info: device:..., firmware:..., protocol:..., usb:..., cdc:..., uptime_s:...
 
 usb?
-  Informacion USB: VID, PID, bcdDevice, mounted, VBUS, ID y estado CDC.
+  Informacion USB.
+  Respuesta: usb: vid:..., pid:..., bcd:..., mounted:..., vbus:..., id:..., cdc:...
 
 program?
-  Informacion del programa cargado: nombre, version, semver, protocolo y build.
+  Informacion del programa cargado.
+  Respuesta: program: name:..., firmware:..., version:..., protocol:..., build:...
 
 
 Sistema
@@ -38,8 +51,10 @@ sys local
   Informacion local del chip: modelo, frecuencia, temperatura interna, VDDA,
   razon de reset y uptime.
 
-sys periferics
+sys chips
+sys chip
 sys peripherals
+sys periferics
   Estado de perifericos de sistema: DS3231, AT24C32 y Keypad.
 
 reset

@@ -4,8 +4,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <KeypadProtocol.h>
+
 #include "core/PeripheralState.h"
 #include "input/ButtonControls.h"
+
+namespace Protocol = DeskBridgeKeypadProtocol;
 
 namespace
 {
@@ -27,51 +31,77 @@ namespace
 
     void replyOk()
     {
-        peripheralSerial.println("OK");
+        peripheralSerial.println(Protocol::Response::Ok);
     }
 
     void replyErr(const char *reason)
     {
-        peripheralSerial.print("ERR ");
+        peripheralSerial.print(Protocol::Response::Err);
+        peripheralSerial.print(' ');
         peripheralSerial.println(reason);
     }
 
     void replyInfo()
     {
-        peripheralSerial.println("OK DEV=66 PROTO=TXT1 NAME=CHIP_KEYPAD");
+        peripheralSerial.print(Protocol::Response::Ok);
+        peripheralSerial.print(' ');
+        peripheralSerial.print(Protocol::Field::Device);
+        peripheralSerial.print(Protocol::DeviceId);
+        peripheralSerial.print(' ');
+        peripheralSerial.print(Protocol::Field::Protocol);
+        peripheralSerial.print(Protocol::ProtocolText);
+        peripheralSerial.print(' ');
+        peripheralSerial.print(Protocol::Field::Name);
+        peripheralSerial.println("CHIP_KEYPAD");
     }
 
     void replyStrip()
     {
-        peripheralSerial.print("OK EN=");
+        peripheralSerial.print(Protocol::Response::Ok);
+        peripheralSerial.print(' ');
+        peripheralSerial.print(Protocol::Field::Enabled);
         peripheralSerial.print(State.stripEnabled ? 1 : 0);
-        peripheralSerial.print(" MODE=");
+        peripheralSerial.print(' ');
+        peripheralSerial.print(Protocol::Field::Mode);
         peripheralSerial.print(static_cast<uint8_t>(State.stripMode));
-        peripheralSerial.print(" VAL=");
+        peripheralSerial.print(' ');
+        peripheralSerial.print(Protocol::Field::Brightness);
         peripheralSerial.print(State.brightness);
-        peripheralSerial.print(" KEL=");
+        peripheralSerial.print(' ');
+        peripheralSerial.print(Protocol::Field::Kelvin);
         peripheralSerial.print(State.kelvin);
-        peripheralSerial.print(" CMIN=");
+        peripheralSerial.print(' ');
+        peripheralSerial.print(Protocol::Field::ColdMin);
         peripheralSerial.print(State.coldMin);
-        peripheralSerial.print(" CMAX=");
+        peripheralSerial.print(' ');
+        peripheralSerial.print(Protocol::Field::ColdMax);
         peripheralSerial.print(State.coldMax);
-        peripheralSerial.print(" WMIN=");
+        peripheralSerial.print(' ');
+        peripheralSerial.print(Protocol::Field::WarmMin);
         peripheralSerial.print(State.warmMin);
-        peripheralSerial.print(" WMAX=");
+        peripheralSerial.print(' ');
+        peripheralSerial.print(Protocol::Field::WarmMax);
         peripheralSerial.print(State.warmMax);
-        peripheralSerial.print(" BSTEP=");
+        peripheralSerial.print(' ');
+        peripheralSerial.print(Protocol::Field::BrightnessStep);
         peripheralSerial.print(State.brightnessStep);
-        peripheralSerial.print(" KSTEP=");
+        peripheralSerial.print(' ');
+        peripheralSerial.print(Protocol::Field::KelvinStep);
         peripheralSerial.print(State.kelvinStep);
-        peripheralSerial.print(" CT=");
+        peripheralSerial.print(' ');
+        peripheralSerial.print(Protocol::Field::ClickMs);
         peripheralSerial.print(State.clickMs);
-        peripheralSerial.print(" LT=");
+        peripheralSerial.print(' ');
+        peripheralSerial.print(Protocol::Field::LongMs);
         peripheralSerial.print(State.longMs);
-        peripheralSerial.print(" RT=");
+        peripheralSerial.print(' ');
+        peripheralSerial.print(Protocol::Field::RepeatMs);
         peripheralSerial.print(State.repeatMs);
-        peripheralSerial.print(" PWM_C=");
+        peripheralSerial.print(' ');
+        peripheralSerial.print(Protocol::Field::PwmCold);
         peripheralSerial.print(State.pwmCold);
-        peripheralSerial.print(" PWM_W=");
+        peripheralSerial.print(' ');
+        peripheralSerial.print(Protocol::Field::PwmWarm);
         peripheralSerial.println(State.pwmWarm);
     }
 
@@ -79,15 +109,21 @@ namespace
     {
         const uint32_t powerMw = (static_cast<uint32_t>(abs(State.currentMa)) * State.supplyMv) / 1000UL;
 
-        peripheralSerial.print("OK MA=");
+        peripheralSerial.print(Protocol::Response::Ok);
+        peripheralSerial.print(' ');
+        peripheralSerial.print(Protocol::Field::CurrentMa);
         peripheralSerial.print(State.currentMa);
-        peripheralSerial.print(" RAW=");
+        peripheralSerial.print(' ');
+        peripheralSerial.print(Protocol::Field::CurrentRaw);
         peripheralSerial.print(State.currentRawAdc);
-        peripheralSerial.print(" MV=");
+        peripheralSerial.print(' ');
+        peripheralSerial.print(Protocol::Field::SupplyMv);
         peripheralSerial.print(State.supplyMv);
-        peripheralSerial.print(" VRAW=");
+        peripheralSerial.print(' ');
+        peripheralSerial.print(Protocol::Field::VoltageRaw);
         peripheralSerial.print(State.voltageRawAdc);
-        peripheralSerial.print(" MW=");
+        peripheralSerial.print(' ');
+        peripheralSerial.print(Protocol::Field::PowerMw);
         peripheralSerial.println(powerMw);
     }
 
@@ -107,17 +143,24 @@ namespace
             }
         }
 
-        peripheralSerial.print("OK EVT=");
+        peripheralSerial.print(Protocol::Response::Ok);
+        peripheralSerial.print(' ');
+        peripheralSerial.print(Protocol::Field::Events);
         peripheralSerial.print(events);
-        peripheralSerial.print(" BP=");
+        peripheralSerial.print(' ');
+        peripheralSerial.print(Protocol::Field::ButtonPressed);
         peripheralSerial.print(pressedMask);
-        peripheralSerial.print(" BR=");
+        peripheralSerial.print(' ');
+        peripheralSerial.print(Protocol::Field::ButtonReleased);
         peripheralSerial.print(releasedMask);
-        peripheralSerial.print(" BD=");
+        peripheralSerial.print(' ');
+        peripheralSerial.print(Protocol::Field::ButtonDown);
         peripheralSerial.print(downMask);
-        peripheralSerial.print(" LB=");
+        peripheralSerial.print(' ');
+        peripheralSerial.print(Protocol::Field::LastButton);
         peripheralSerial.print(lastButton);
-        peripheralSerial.print(" BE=");
+        peripheralSerial.print(' ');
+        peripheralSerial.print(Protocol::Field::ButtonEdge);
         peripheralSerial.println(static_cast<uint8_t>(lastEdge));
         clearEvents();
         clearButtonEdges();
@@ -134,15 +177,21 @@ namespace
             }
         }
 
-        peripheralSerial.print("OK BP=");
+        peripheralSerial.print(Protocol::Response::Ok);
+        peripheralSerial.print(' ');
+        peripheralSerial.print(Protocol::Field::ButtonPressed);
         peripheralSerial.print(State.pendingButtonPressedMask);
-        peripheralSerial.print(" BR=");
+        peripheralSerial.print(' ');
+        peripheralSerial.print(Protocol::Field::ButtonReleased);
         peripheralSerial.print(State.pendingButtonReleasedMask);
-        peripheralSerial.print(" BD=");
+        peripheralSerial.print(' ');
+        peripheralSerial.print(Protocol::Field::ButtonDown);
         peripheralSerial.print(downMask);
-        peripheralSerial.print(" LB=");
+        peripheralSerial.print(' ');
+        peripheralSerial.print(Protocol::Field::LastButton);
         peripheralSerial.print(State.lastButtonEventIndex);
-        peripheralSerial.print(" BE=");
+        peripheralSerial.print(' ');
+        peripheralSerial.print(Protocol::Field::ButtonEdge);
         peripheralSerial.println(static_cast<uint8_t>(State.lastButtonEventEdge));
         clearButtonEdges();
     }
@@ -152,17 +201,22 @@ namespace
         char actionHex[9] = {};
         if (consumeCoreAction(actionHex, sizeof(actionHex)))
         {
-            peripheralSerial.print("OK ACT=");
+            peripheralSerial.print(Protocol::Response::Ok);
+            peripheralSerial.print(' ');
+            peripheralSerial.print(Protocol::Field::Action);
             peripheralSerial.println(actionHex);
             return;
         }
 
-        peripheralSerial.println("OK ACT=NONE");
+        peripheralSerial.print(Protocol::Response::Ok);
+        peripheralSerial.print(' ');
+        peripheralSerial.print(Protocol::Field::Action);
+        peripheralSerial.println(Protocol::Response::ActionNone);
     }
 
     void replyButtonActionList()
     {
-        peripheralSerial.print("OK");
+        peripheralSerial.print(Protocol::Response::Ok);
         const ButtonTaskDefinition *definitions = ButtonControls::taskDefinitions();
         const uint8_t count = ButtonControls::taskDefinitionCount();
         uint8_t available = 0;
@@ -180,13 +234,14 @@ namespace
             }
         }
 
-        peripheralSerial.print(" N=");
+        peripheralSerial.print(' ');
+        peripheralSerial.print(Protocol::Field::AvailableCount);
         peripheralSerial.println(available);
     }
 
     void replyButtonAssignments()
     {
-        peripheralSerial.print("OK");
+        peripheralSerial.print(Protocol::Response::Ok);
         for (uint8_t index = 0; index < PeripheralConfig::BUTTON_COUNT; ++index)
         {
             peripheralSerial.print(" B");
@@ -217,11 +272,6 @@ namespace
         return true;
     }
 
-    bool startsWith(const char *text, const char *prefix)
-    {
-        return strncmp(text, prefix, strlen(prefix)) == 0;
-    }
-
     void executeLine(char *line)
     {
         while (*line == ' ')
@@ -234,65 +284,65 @@ namespace
             return;
         }
 
-        if (strcmp(line, "PING") == 0)
+        if (strcmp(line, Protocol::Command::Ping) == 0)
         {
-            peripheralSerial.println("OK PONG");
+            peripheralSerial.println(Protocol::Response::Pong);
             return;
         }
 
-        if (strcmp(line, "INF?") == 0)
+        if (strcmp(line, Protocol::Command::Info) == 0)
         {
             replyInfo();
             return;
         }
 
-        if (strcmp(line, "STR?") == 0)
+        if (strcmp(line, Protocol::Command::Strip) == 0)
         {
             replyStrip();
             return;
         }
 
-        if (strcmp(line, "PWR?") == 0)
+        if (strcmp(line, Protocol::Command::Power) == 0)
         {
             replyPower();
             return;
         }
 
-        if (strcmp(line, "EVT?") == 0)
+        if (strcmp(line, Protocol::Command::Events) == 0)
         {
             replyEvents();
             return;
         }
 
-        if (strcmp(line, "BTN?") == 0)
+        if (strcmp(line, Protocol::Command::Buttons) == 0)
         {
             replyButtonEdges();
             return;
         }
 
-        if (strcmp(line, "ACT?") == 0)
+        if (strcmp(line, Protocol::Command::Action) == 0)
         {
             replyAction();
             return;
         }
 
-        if (strcmp(line, "BAL?") == 0)
+        if (strcmp(line, Protocol::Command::ButtonActionList) == 0)
         {
             replyButtonActionList();
             return;
         }
 
-        if (strcmp(line, "BAS?") == 0)
+        if (strcmp(line, Protocol::Command::ButtonAssignments) == 0)
         {
             replyButtonAssignments();
             return;
         }
 
-        if (startsWith(line, "BSA"))
+        if (Protocol::startsWith(line, Protocol::Prefix::SetButtonAction))
         {
             uint8_t buttonIndex = 0;
             ButtonTaskOption option = ButtonTaskOption::STRIP_POWER_AND_BRIGHTNESS;
-            if (!parseButtonAssignment(line + 3, buttonIndex, option))
+            if (!parseButtonAssignment(line + strlen(Protocol::Prefix::SetButtonAction), buttonIndex, option))
             {
                 replyErr("BAD_ARGS");
                 return;
@@ -308,118 +358,118 @@ namespace
             return;
         }
 
-        if (strcmp(line, "SCL") == 0)
+        if (strcmp(line, Protocol::Command::ClearEvents) == 0)
         {
             clearEvents();
             replyOk();
             return;
         }
 
-        if (strcmp(line, "SRD") == 0)
+        if (strcmp(line, Protocol::Command::ResetDefaults) == 0)
         {
             resetStateDefaults();
             replyOk();
             return;
         }
 
-        if (startsWith(line, "SSE"))
+        if (Protocol::startsWith(line, Protocol::Prefix::SetEnabled))
         {
-            State.stripEnabled = strtoul(line + 3, nullptr, 10) != 0;
+            State.stripEnabled = strtoul(line + strlen(Protocol::Prefix::SetEnabled), nullptr, 10) != 0;
             replyOk();
             return;
         }
 
-        if (startsWith(line, "SSM"))
+        if (Protocol::startsWith(line, Protocol::Prefix::SetMode))
         {
-            const uint8_t mode = static_cast<uint8_t>(strtoul(line + 3, nullptr, 10));
+            const uint8_t mode = static_cast<uint8_t>(strtoul(line + strlen(Protocol::Prefix::SetMode), nullptr, 10));
             State.stripMode = mode <= static_cast<uint8_t>(StripMode::DualWhite) ? static_cast<StripMode>(mode) : StripMode::DualWhite;
             replyOk();
             return;
         }
 
-        if (startsWith(line, "SSV"))
+        if (Protocol::startsWith(line, Protocol::Prefix::SetBrightness))
         {
-            State.brightness = readU16Tail(line, 3);
+            State.brightness = readU16Tail(line, strlen(Protocol::Prefix::SetBrightness));
             normalizeState();
             replyOk();
             return;
         }
 
-        if (startsWith(line, "SSK"))
+        if (Protocol::startsWith(line, Protocol::Prefix::SetKelvin))
         {
-            State.kelvin = readU16Tail(line, 3);
+            State.kelvin = readU16Tail(line, strlen(Protocol::Prefix::SetKelvin));
             normalizeState();
             replyOk();
             return;
         }
 
-        if (startsWith(line, "SCN"))
+        if (Protocol::startsWith(line, Protocol::Prefix::SetColdMin))
         {
-            State.coldMin = readU16Tail(line, 3);
+            State.coldMin = readU16Tail(line, strlen(Protocol::Prefix::SetColdMin));
             normalizeState();
             replyOk();
             return;
         }
 
-        if (startsWith(line, "SCX"))
+        if (Protocol::startsWith(line, Protocol::Prefix::SetColdMax))
         {
-            State.coldMax = readU16Tail(line, 3);
+            State.coldMax = readU16Tail(line, strlen(Protocol::Prefix::SetColdMax));
             normalizeState();
             replyOk();
             return;
         }
 
-        if (startsWith(line, "SWN"))
+        if (Protocol::startsWith(line, Protocol::Prefix::SetWarmMin))
         {
-            State.warmMin = readU16Tail(line, 3);
+            State.warmMin = readU16Tail(line, strlen(Protocol::Prefix::SetWarmMin));
             normalizeState();
             replyOk();
             return;
         }
 
-        if (startsWith(line, "SWX"))
+        if (Protocol::startsWith(line, Protocol::Prefix::SetWarmMax))
         {
-            State.warmMax = readU16Tail(line, 3);
+            State.warmMax = readU16Tail(line, strlen(Protocol::Prefix::SetWarmMax));
             normalizeState();
             replyOk();
             return;
         }
 
-        if (startsWith(line, "SBS"))
+        if (Protocol::startsWith(line, Protocol::Prefix::SetBrightnessStep))
         {
-            State.brightnessStep = readU16Tail(line, 3);
+            State.brightnessStep = readU16Tail(line, strlen(Protocol::Prefix::SetBrightnessStep));
             normalizeState();
             replyOk();
             return;
         }
 
-        if (startsWith(line, "SKS"))
+        if (Protocol::startsWith(line, Protocol::Prefix::SetKelvinStep))
         {
-            State.kelvinStep = readU16Tail(line, 3);
+            State.kelvinStep = readU16Tail(line, strlen(Protocol::Prefix::SetKelvinStep));
             normalizeState();
             replyOk();
             return;
         }
 
-        if (startsWith(line, "SCT"))
+        if (Protocol::startsWith(line, Protocol::Prefix::SetClickMs))
         {
-            State.clickMs = readMsTail(line, 3);
+            State.clickMs = readMsTail(line, strlen(Protocol::Prefix::SetClickMs));
             normalizeState();
             replyOk();
             return;
         }
 
-        if (startsWith(line, "SLT"))
+        if (Protocol::startsWith(line, Protocol::Prefix::SetLongMs))
         {
-            State.longMs = readMsTail(line, 3);
+            State.longMs = readMsTail(line, strlen(Protocol::Prefix::SetLongMs));
             normalizeState();
             replyOk();
             return;
         }
 
-        if (startsWith(line, "SRT"))
+        if (Protocol::startsWith(line, Protocol::Prefix::SetRepeatMs))
         {
-            State.repeatMs = readMsTail(line, 3);
+            State.repeatMs = readMsTail(line, strlen(Protocol::Prefix::SetRepeatMs));
             normalizeState();
             replyOk();
             return;

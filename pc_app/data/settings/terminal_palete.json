@@ -1,0 +1,47 @@
+{
+  "selected": "default",
+  "palettes": {
+    "default": {
+      "title": "cyan_bright",
+      "subtitle": "cyan",
+      "command": "green_bright",
+      "argument": "yellow",
+      "variable": "magenta",
+      "value": "white",
+      "success": "green_bright",
+      "warning": "yellow",
+      "error": "red_bright",
+      "muted": "gray",
+      "prompt": "blue_bright",
+      "debug": "magenta_bright"
+    },
+    "soft": {
+      "title": "white_bright",
+      "subtitle": "cyan",
+      "command": "green",
+      "argument": "white",
+      "variable": "yellow",
+      "value": "white",
+      "success": "green",
+      "warning": "yellow",
+      "error": "red",
+      "muted": "gray",
+      "prompt": "cyan_bright",
+      "debug": "magenta"
+    },
+    "high_contrast": {
+      "title": "white_bright",
+      "subtitle": "white",
+      "command": "cyan_bright",
+      "argument": "yellow_bright",
+      "variable": "magenta_bright",
+      "value": "white_bright",
+      "success": "green_bright",
+      "warning": "yellow_bright",
+      "error": "red_bright",
+      "muted": "white",
+      "prompt": "green_bright",
+      "debug": "magenta_bright"
+    }
+  }
+}

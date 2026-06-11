@@ -1,0 +1,24 @@
+# DeskBridge USB protocol ERR codes
+
+Format:
+[ERR] 0xNNNN description
+
+0xE000 GENERIC_COMMAND_ERROR
+  Source: chip_core/lib/shell/commands.cpp
+  Meaning: command-specific validation failed. The text after the code explains the reason.
+
+0xE001 SHELL_LINE_TOO_LONG
+  Source: chip_core/lib/shell/libs.cpp
+  Meaning: received command line exceeded the shell buffer.
+
+0xE002 SHELL_UNKNOWN_COMMAND
+  Source: chip_core/lib/shell/libs.cpp
+  Meaning: command was not recognized by the native shell or legacy parser.
+
+0xE100 USB_PROTOCOL_BAD_PREFIX
+  Source: reserved.
+  Meaning: future use for malformed protocol identifiers.
+
+0xE200 KEYPAD_NOT_PRESENT
+  Source: chip_core/lib/shell/commands.cpp
+  Meaning: CHIP_KEYPAD communication is missing when a command needs it.

@@ -1,0 +1,7 @@
+{
+  "name": "DeskBridgeKeypadProtocol",
+  "version": "0.1.0",
+  "description": "Shared UART text protocol helpers for DeskBridge chip_core and chip_keypad.",
+  "frameworks": "arduino",
+  "platforms": "ststm32"
+}

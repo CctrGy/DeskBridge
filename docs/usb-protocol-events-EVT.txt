@@ -1,0 +1,28 @@
+# DeskBridge USB protocol EVT codes
+
+Format:
+[EVT] 0xNNNN EVENT_NAME detail
+
+0x1001 BATTERY_IS_LOW
+  Source: chip_core power manager, pending integration.
+  Meaning: battery level is below the safe threshold.
+
+0x1002 AMP_SUPPLY_OVERHEAD
+  Source: chip_core power manager, pending integration.
+  Meaning: measured current is above the configured safe operating budget.
+
+0x1003 POWER_EXTERNAL_DISABLED
+  Source: chip_core power manager, pending integration.
+  Meaning: external supply path was disabled or lost.
+
+0x1004 USB_VBUS_PRESENT
+  Source: chip_core/src/otros/usb/DeskUSB.cpp
+  Meaning: USB VBUS is detected.
+
+0x1005 USB_VBUS_LOST
+  Source: chip_core/src/otros/usb/DeskUSB.cpp
+  Meaning: USB VBUS is not detected.
+
+0x1101 KEYPAD_BUTTON_EDGE
+  Source: chip_core/src/otros/bus/KeypadPeripheral.cpp
+  Meaning: CHIP_KEYPAD reported a button edge.

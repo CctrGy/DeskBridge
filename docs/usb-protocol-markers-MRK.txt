@@ -1,0 +1,16 @@
+# DeskBridge USB protocol MRK codes
+
+Format:
+[MRK] 0xNNNN marker.name
+
+0xA001 shell.begin
+  Source: chip_core/lib/shell/libs.cpp
+  Meaning: USB shell was initialized and is ready to receive commands.
+
+0xA100 usb.descriptor.self_powered_remote_wakeup
+  Source: chip_core/include/usb/usb_descriptors.h
+  Meaning: descriptor declares self-powered device with remote wakeup support.
+
+0xA200 keypad.protocol.shared_library
+  Source: shared_lib/DeskBridgeKeypadProtocol/src/KeypadProtocol.h
+  Meaning: shared CORE<->KEYPAD protocol constants are in use.

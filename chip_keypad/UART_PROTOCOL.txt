@@ -1,6 +1,10 @@
 DeskBridge keypad UART text protocol
 =======================================
 
+The command names, prefixes, line helpers and `KEY=value` parser live in the
+shared `DeskBridgeKeypadProtocol` library at
+`shared_lib/DeskBridgeKeypadProtocol`.
+
 Physical link
 -------------
 

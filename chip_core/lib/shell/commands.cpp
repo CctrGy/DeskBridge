@@ -60,55 +60,36 @@ namespace
 
     void reply(Shell &shell, const char *text)
     {
-        shell.writeLine(text);
-    }
-
-    void replyFormat(Shell &shell, const char *format, ...)
-    {
-        char buffer[160] = {};
-        va_list args;
-        va_start(args, format);
-        vsnprintf(buffer, sizeof(buffer), format, args);
-        va_end(args);
+        char buffer[192] = {};
+        if (strncmp(text, "ERR", 3) == 0)
+        {
+            const char *detail = text + 3;
+            while (*detail == ' ')
+            {
+                ++detail;
+            }
+            snprintf(buffer, sizeof(buffer), "[ERR] 0xE000 %s", detail);
+        }
+        else
+        {
+            snprintf(buffer, sizeof(buffer), "[RSP] %s", text);
+        }
         shell.writeLine(buffer);
     }
 
-    void replyHeader(Shell &shell, const char *title)
+    void replyList(Shell &shell, const char *name, const char *format, ...)
     {
-        reply(shell, "");
-        replyFormat(shell, "[%s]", title);
+        char values[160] = {};
+        char buffer[192] = {};
+        va_list args;
+        va_start(args, format);
+        vsnprintf(values, sizeof(values), format, args);
+        va_end(args);
+        snprintf(buffer, sizeof(buffer), "[RSP] %s: %s", name, values);
+        shell.writeLine(buffer);
     }
 
     void handleSensorQuery(Shell &shell);
-
-    void handleHelp(Shell &shell)
-    {
-        static const char helpText[] =
-            "help\r\n"
-            "ping\r\n"
-            "info?\r\n"
-            "usb?\r\n"
-            "program?\r\n"
-            "sys?\r\n"
-            "sys <local/periferics/peripherals>\r\n"
-            "bus?\r\n"
-            "bus <scan>\r\n"
-            "bus <time_read/samples> [value]\r\n"
-            "bus <sensor> [sel]\r\n"
-            "rtc?\r\n"
-            "rtc <get>\r\n"
-            "rtc <set> [value]\r\n"
-            "keypad?\r\n"
-            "light?\r\n"
-            "light <enabled/mode/brightness/kelvin> [value]\r\n"
-            "light <cold_min/cold_max/warm_min/warm_max> [value]\r\n"
-            "light <click/long/repeat> [value]\r\n"
-            "light <brightness_step/kelvin_step> [value]\r\n"
-            "light <power/sync>\r\n"
-            "reset\r\n"
-            "reset <peripherals/keypad/settings/core>";
-        shell.writeLine(helpText);
-    }
 
     Tokens tokenize(const char *line)
     {
@@ -315,7 +296,7 @@ namespace
 
     void printDeviceLine(Shell &shell, DeskBus::Device device)
     {
-        replyFormat(shell, "  %-8s addr=%-5s state=%s", DeskBus::name(device), DeskBus::addressText(device), DeskBus::ready(device) ? "ok" : "fail");
+        replyList(shell, "device", "name:%s, addr:%s, state:%s", DeskBus::name(device), DeskBus::addressText(device), DeskBus::ready(device) ? "ok" : "fail");
     }
 
     void printSensorValue(Shell &shell, DeskBus::Device device)
@@ -326,23 +307,19 @@ namespace
         switch (device)
         {
             case DeskBus::Device::ENS160:
-                replyFormat(shell, "  aqi      : %u", data.airQualityIndex);
-                replyFormat(shell, "  eco2     : %d ppm", data.ensEco2Ppm);
-                replyFormat(shell, "  tvoc     : %d ppb", data.tvocPpb);
+                replyList(shell, "sensor_data", "name:%s, aqi:%u, eco2_ppm:%d, tvoc_ppb:%d", DeskBus::name(device), data.airQualityIndex, data.ensEco2Ppm, data.tvocPpb);
                 break;
             case DeskBus::Device::AHT21:
-                replyFormat(shell, "  temp     : %.1f C", data.temperature);
-                replyFormat(shell, "  humidity : %.1f %%", data.humidity);
+                replyList(shell, "sensor_data", "name:%s, temp_c:%.1f, humidity_pct:%.1f", DeskBus::name(device), data.temperature, data.humidity);
                 break;
             case DeskBus::Device::VEML7700:
-                replyFormat(shell, "  lux      : %.1f lx", data.lux);
+                replyList(shell, "sensor_data", "name:%s, lux:%.1f", DeskBus::name(device), data.lux);
                 break;
             case DeskBus::Device::SCD41:
-                replyFormat(shell, "  co2      : %d ppm", data.co2Ppm);
+                replyList(shell, "sensor_data", "name:%s, co2_ppm:%d", DeskBus::name(device), data.co2Ppm);
                 break;
             case DeskBus::Device::SHT21:
-                replyFormat(shell, "  temp     : %.1f C", data.shtTemperature);
-                replyFormat(shell, "  humidity : %.1f %%", data.shtHumidity);
+                replyList(shell, "sensor_data", "name:%s, temp_c:%.1f, humidity_pct:%.1f", DeskBus::name(device), data.shtTemperature, data.shtHumidity);
                 break;
             default:
                 break;
@@ -351,71 +328,74 @@ namespace
 
     void handleInfo(Shell &shell)
     {
-        replyHeader(shell, "info");
-        replyFormat(shell, "  device   : %s", DeskBridgeVersion::DEVICE_NAME);
-        replyFormat(shell, "  firmware : %s", DeskBridgeVersion::FIRMWARE);
-        replyFormat(shell, "  protocol : %u", DeskBridgeVersion::SERIAL_PROTOCOL);
-        replyFormat(shell, "  usb      : %s", DeskUSB::mounted() ? "mounted" : "unmounted");
-        replyFormat(shell, "  cdc      : %s", DeskUSB::cdcConnected(DeskUSB::CONTROL) ? "open" : "closed");
-        replyFormat(shell, "  uptime   : %lus", static_cast<unsigned long>(McuMonitor::uptimeSeconds()));
+        replyList(shell, "info", "device:%s, firmware:%s, protocol:%u, usb:%s, cdc:%s, uptime_s:%lu",
+                  DeskBridgeVersion::DEVICE_NAME,
+                  DeskBridgeVersion::FIRMWARE,
+                  DeskBridgeVersion::SERIAL_PROTOCOL,
+                  DeskUSB::mounted() ? "mounted" : "unmounted",
+                  DeskUSB::cdcConnected(DeskUSB::CONTROL) ? "open" : "closed",
+                  static_cast<unsigned long>(McuMonitor::uptimeSeconds()));
     }
 
     void handleUsb(Shell &shell)
     {
-        replyHeader(shell, "usb");
-        replyFormat(shell, "  vid      : 0x%04X", DESKBRIDGE_USB_VID);
-        replyFormat(shell, "  pid      : 0x%04X", DESKBRIDGE_USB_PID);
-        replyFormat(shell, "  bcd      : 0x%04X", DeskBridgeVersion::USB_DEVICE_BCD);
-        replyFormat(shell, "  mounted  : %s", DeskUSB::mounted() ? "yes" : "no");
-        replyFormat(shell, "  vbus     : %s", DeskUSB::vbusPresent() ? "yes" : "no");
-        replyFormat(shell, "  id       : %s", DeskUSB::idGrounded() ? "grounded" : "floating");
-        replyFormat(shell, "  cdc      : %s", DeskUSB::cdcConnected(DeskUSB::CONTROL) ? "open" : "closed");
+        replyList(shell, "usb", "vid:0x%04X, pid:0x%04X, bcd:0x%04X, mounted:%s, vbus:%s, id:%s, cdc:%s",
+                  DESKBRIDGE_USB_VID,
+                  DESKBRIDGE_USB_PID,
+                  DeskBridgeVersion::USB_DEVICE_BCD,
+                  DeskUSB::mounted() ? "yes" : "no",
+                  DeskUSB::vbusPresent() ? "yes" : "no",
+                  DeskUSB::idGrounded() ? "grounded" : "floating",
+                  DeskUSB::cdcConnected(DeskUSB::CONTROL) ? "open" : "closed");
     }
 
     void handleProgram(Shell &shell)
     {
         const DeskBridgeVersion::Info version = DeskBridgeVersion::current();
-        replyHeader(shell, "program");
-        replyFormat(shell, "  name     : %s", version.deviceName);
-        replyFormat(shell, "  firmware : %s", version.firmware);
-        replyFormat(shell, "  semver   : %u.%u.%u", version.major, version.minor, version.patch);
-        replyFormat(shell, "  protocol : %u", version.serialProtocol);
-        replyFormat(shell, "  build    : %lu", static_cast<unsigned long>(version.buildUnixTime));
+        replyList(shell, "program", "name:%s, firmware:%s, version:%u.%u.%u, protocol:%u, build:%lu",
+                  version.deviceName,
+                  version.firmware,
+                  version.major,
+                  version.minor,
+                  version.patch,
+                  version.serialProtocol,
+                  static_cast<unsigned long>(version.buildUnixTime));
     }
 
     void handleSys(Shell &shell, const Tokens &tokens)
     {
         if (tokens.count == 1 || equals(tokens.value[1], "local"))
         {
-            replyHeader(shell, "system");
-            replyFormat(shell, "  chip     : %s", McuMonitor::chipName());
-            replyFormat(shell, "  clock    : %lu Hz", static_cast<unsigned long>(McuMonitor::coreClockHz()));
-            replyFormat(shell, "  temp     : %.1f C", McuMonitor::temperatureC());
-            replyFormat(shell, "  vdda     : %.2f V", McuMonitor::vddaVolts());
-            replyFormat(shell, "  reset    : %s", McuMonitor::resetReason());
-            replyFormat(shell, "  uptime   : %lus", static_cast<unsigned long>(McuMonitor::uptimeSeconds()));
+            replyList(shell, "system", "chip:%s, clock_hz:%lu, temp_c:%.1f, vdda_v:%.2f, reset:%s, uptime_s:%lu",
+                      McuMonitor::chipName(),
+                      static_cast<unsigned long>(McuMonitor::coreClockHz()),
+                      McuMonitor::temperatureC(),
+                      McuMonitor::vddaVolts(),
+                      McuMonitor::resetReason(),
+                      static_cast<unsigned long>(McuMonitor::uptimeSeconds()));
             return;
         }
 
-        if (equals(tokens.value[1], "periferics") || equals(tokens.value[1], "peripherals"))
+        if (equals(tokens.value[1], "chip") || equals(tokens.value[1], "chips") ||
+            equals(tokens.value[1], "periferics") || equals(tokens.value[1], "peripherals"))
         {
-            replyHeader(shell, "system peripherals");
+            replyList(shell, "system_peripherals", "count:%u", 3);
             printDeviceLine(shell, DeskBus::Device::DS3231);
             printDeviceLine(shell, DeskBus::Device::AT24C32);
             printDeviceLine(shell, DeskBus::Device::Keypad);
             return;
         }
 
-        reply(shell, "ERR use: sys? | sys local | sys periferics");
+        reply(shell, "ERR use: sys? | sys local | sys chips");
     }
 
     void handleBusQuery(Shell &shell)
     {
         const DeskSettings::Config &settings = DeskSettings::dataConst();
-        replyHeader(shell, "bus");
-        replyFormat(shell, "  time_read: %lums", static_cast<unsigned long>(settings.sensorSampleIntervalMs));
-        replyFormat(shell, "  samples  : %u", settings.sensorSampleCount);
-        reply(shell, "  sensors:");
+        replyList(shell, "bus", "time_read_ms:%lu, samples:%u, sensors:%u",
+                  static_cast<unsigned long>(settings.sensorSampleIntervalMs),
+                  settings.sensorSampleCount,
+                  5);
         printDeviceLine(shell, DeskBus::Device::ENS160);
         printDeviceLine(shell, DeskBus::Device::AHT21);
         printDeviceLine(shell, DeskBus::Device::VEML7700);
@@ -435,11 +415,10 @@ namespace
         {
             uint8_t addresses[12] = {};
             const uint8_t count = DeskBus::scanSensors(addresses, sizeof(addresses));
-            replyHeader(shell, "bus scan");
-            replyFormat(shell, "  found    : %u", count);
+            replyList(shell, "bus_scan", "found:%u", count);
             for (uint8_t index = 0; index < count; ++index)
             {
-                replyFormat(shell, "  addr[%u]  : 0x%02X", index, addresses[index]);
+                replyList(shell, "bus_addr", "index:%u, addr:0x%02X", index, addresses[index]);
             }
             return;
         }
@@ -460,7 +439,6 @@ namespace
                 return;
             }
 
-            replyHeader(shell, "bus sensor");
             printSensorValue(shell, device);
             return;
         }
@@ -469,8 +447,7 @@ namespace
         {
             if (tokens.count == 2)
             {
-                replyHeader(shell, "bus time_read");
-                replyFormat(shell, "  value    : %lums", static_cast<unsigned long>(DeskSettings::dataConst().sensorSampleIntervalMs));
+                replyList(shell, "bus_time_read", "value_ms:%lu", static_cast<unsigned long>(DeskSettings::dataConst().sensorSampleIntervalMs));
                 return;
             }
 
@@ -483,7 +460,7 @@ namespace
 
             DeskSettings::data().sensorSampleIntervalMs = clampU32(value, SENSOR_SAMPLE_INTERVAL_MS_MIN_DEFAULT, SENSOR_SAMPLE_INTERVAL_MS_MAX_DEFAULT);
             DeskSettings::markDirty();
-            replyFormat(shell, "OK bus.time_read = %lums", static_cast<unsigned long>(DeskSettings::dataConst().sensorSampleIntervalMs));
+            replyList(shell, "ok", "bus.time_read_ms:%lu", static_cast<unsigned long>(DeskSettings::dataConst().sensorSampleIntervalMs));
             return;
         }
 
@@ -491,8 +468,7 @@ namespace
         {
             if (tokens.count == 2)
             {
-                replyHeader(shell, "bus samples");
-                replyFormat(shell, "  value    : %u", DeskSettings::dataConst().sensorSampleCount);
+                replyList(shell, "bus_samples", "value:%u", DeskSettings::dataConst().sensorSampleCount);
                 return;
             }
 
@@ -505,7 +481,7 @@ namespace
 
             DeskSettings::data().sensorSampleCount = static_cast<uint8_t>(clampU32(value, SENSOR_SAMPLE_COUNT_MIN_DEFAULT, SENSOR_SAMPLE_COUNT_MAX_DEFAULT));
             DeskSettings::markDirty();
-            replyFormat(shell, "OK bus.samples = %u", DeskSettings::dataConst().sensorSampleCount);
+            replyList(shell, "ok", "bus.samples:%u", DeskSettings::dataConst().sensorSampleCount);
             return;
         }
 
@@ -516,39 +492,67 @@ namespace
     {
         const KeypadPeripheral::Snapshot &keypad = KeypadPeripheral::snapshot();
 
-        replyHeader(shell, "keypad");
-        replyFormat(shell, "  state    : %s", DeskBus::ready(DeskBus::Device::Keypad) ? "ok" : "fail");
-        replyFormat(shell, "  protocol : %s", keypad.protocolText[0] != '\0' ? keypad.protocolText : "unknown");
-        replyFormat(shell, "  event    : pin=%s state=%s irq=%s count=%lu", KeypadPeripheral::eventPending() ? "high" : "low", keypad.statePin ? "high" : "low", keypad.eventInterruptEnabled ? "on" : "off", keypad.eventInterruptCount);
-        replyFormat(shell, "  buttons  : bp=%u br=%u bd=%u last=%u edge=%u", keypad.buttonPressedMask, keypad.buttonReleasedMask, keypad.buttonDownMask, keypad.lastButton, keypad.lastButtonEdge);
-        replyFormat(shell, "  assign   : %u,%u,%u,%u,%u", keypad.buttonAssignments[0], keypad.buttonAssignments[1], keypad.buttonAssignments[2], keypad.buttonAssignments[3], keypad.buttonAssignments[4]);
-        replyFormat(shell, "  action   : %s", keypad.lastAction[0] != '\0' ? keypad.lastAction : "none");
-        replyFormat(shell, "  enabled  : %s", keypad.stripEnabled ? "yes" : "no");
-        replyFormat(shell, "  mode     : %u", keypad.stripMode);
-        replyFormat(shell, "  bright   : %u", keypad.brightness);
-        replyFormat(shell, "  kelvin   : %u", keypad.kelvin);
-        replyFormat(shell, "  pwm      : cold=%u warm=%u", keypad.pwmCold, keypad.pwmWarm);
-        replyFormat(shell, "  power    : %dmA %umV %lumW raw=%u/%u", keypad.currentMa, keypad.supplyMv, keypad.powerMw, keypad.currentRaw, keypad.voltageRaw);
+        replyList(shell, "keypad", "state:%s, protocol:%s, event_pin:%s, state_pin:%s, irq:%s, irq_count:%lu, action:%s",
+                  DeskBus::ready(DeskBus::Device::Keypad) ? "ok" : "fail",
+                  keypad.protocolText[0] != '\0' ? keypad.protocolText : "unknown",
+                  KeypadPeripheral::eventPending() ? "high" : "low",
+                  keypad.statePin ? "high" : "low",
+                  keypad.eventInterruptEnabled ? "on" : "off",
+                  keypad.eventInterruptCount,
+                  keypad.lastAction[0] != '\0' ? keypad.lastAction : "none");
+        replyList(shell, "keypad_buttons", "pressed:%u, released:%u, down:%u, last:%u, edge:%u, assign:%u/%u/%u/%u/%u",
+                  keypad.buttonPressedMask,
+                  keypad.buttonReleasedMask,
+                  keypad.buttonDownMask,
+                  keypad.lastButton,
+                  keypad.lastButtonEdge,
+                  keypad.buttonAssignments[0],
+                  keypad.buttonAssignments[1],
+                  keypad.buttonAssignments[2],
+                  keypad.buttonAssignments[3],
+                  keypad.buttonAssignments[4]);
+        replyList(shell, "keypad_light", "enabled:%s, mode:%u, brightness:%u, kelvin:%u, pwm_cold:%u, pwm_warm:%u, current_ma:%d, voltage_mv:%u, power_mw:%lu, raw_current:%u, raw_voltage:%u",
+                  keypad.stripEnabled ? "yes" : "no",
+                  keypad.stripMode,
+                  keypad.brightness,
+                  keypad.kelvin,
+                  keypad.pwmCold,
+                  keypad.pwmWarm,
+                  keypad.currentMa,
+                  keypad.supplyMv,
+                  keypad.powerMw,
+                  keypad.currentRaw,
+                  keypad.voltageRaw);
     }
 
     void handleLightQuery(Shell &shell)
     {
         const KeypadPeripheral::Snapshot &keypad = KeypadPeripheral::snapshot();
 
-        replyHeader(shell, "light");
-        replyFormat(shell, "  enabled  : %s", StripLight::enabled() ? "yes" : "no");
-        replyFormat(shell, "  mode     : %s", StripLight::modeName());
-        replyFormat(shell, "  bright   : %u", StripLight::brightness());
-        replyFormat(shell, "  b_min    : %u", StripLight::brightnessMin());
-        replyFormat(shell, "  b_max    : %u", StripLight::brightnessMax());
-        replyFormat(shell, "  kelvin   : %u", StripLight::kelvinMix());
-        replyFormat(shell, "  cold     : min=%u max=%u", StripLight::coldMin(), StripLight::coldMax());
-        replyFormat(shell, "  warm     : min=%u max=%u", StripLight::hotMin(), StripLight::hotMax());
-        replyFormat(shell, "  buttons  : click=%ums long=%ums repeat=%ums", StripLight::buttonClickTime(), StripLight::buttonLongTime(), StripLight::buttonDuringTime());
-        replyFormat(shell, "  steps    : bright=%u kelvin=%u", StripLight::brightnessStep(), StripLight::kelvinStep());
-        replyFormat(shell, "  keypad   : %s", KeypadPeripheral::present() ? "ok" : "missing");
-        replyFormat(shell, "  pwm      : cold=%u warm=%u", keypad.pwmCold, keypad.pwmWarm);
-        replyFormat(shell, "  power    : %dmA raw=%u mv=%u", keypad.currentMa, keypad.currentRaw, keypad.supplyMv);
+        replyList(shell, "light", "enabled:%s, mode:%s, brightness:%u, brightness_min:%u, brightness_max:%u, kelvin:%u, cold_min:%u, cold_max:%u, warm_min:%u, warm_max:%u",
+                  StripLight::enabled() ? "yes" : "no",
+                  StripLight::modeName(),
+                  StripLight::brightness(),
+                  StripLight::brightnessMin(),
+                  StripLight::brightnessMax(),
+                  StripLight::kelvinMix(),
+                  StripLight::coldMin(),
+                  StripLight::coldMax(),
+                  StripLight::hotMin(),
+                  StripLight::hotMax());
+        replyList(shell, "light_buttons", "click_ms:%u, long_ms:%u, repeat_ms:%u, brightness_step:%u, kelvin_step:%u",
+                  StripLight::buttonClickTime(),
+                  StripLight::buttonLongTime(),
+                  StripLight::buttonDuringTime(),
+                  StripLight::brightnessStep(),
+                  StripLight::kelvinStep());
+        replyList(shell, "light_power", "keypad:%s, pwm_cold:%u, pwm_warm:%u, current_ma:%d, raw_current:%u, voltage_mv:%u",
+                  KeypadPeripheral::present() ? "ok" : "missing",
+                  keypad.pwmCold,
+                  keypad.pwmWarm,
+                  keypad.currentMa,
+                  keypad.currentRaw,
+                  keypad.supplyMv);
     }
 
     void handleLight(Shell &shell, const Tokens &tokens)
@@ -561,7 +565,14 @@ namespace
 
         if (equals(tokens.value[1], "sync"))
         {
-            reply(shell, KeypadPeripheral::syncStripConfig() ? "OK light.sync" : "ERR keypad missing");
+            if (KeypadPeripheral::syncStripConfig())
+            {
+                replyList(shell, "ok", "light.sync:done");
+            }
+            else
+            {
+                reply(shell, "ERR keypad missing");
+            }
             return;
         }
 
@@ -569,12 +580,13 @@ namespace
         {
             KeypadPeripheral::update();
             const KeypadPeripheral::Snapshot &keypad = KeypadPeripheral::snapshot();
-            replyHeader(shell, "light power");
-            replyFormat(shell, "  state    : %s", KeypadPeripheral::present() ? "ok" : "missing");
-            replyFormat(shell, "  current  : %dmA", keypad.currentMa);
-            replyFormat(shell, "  voltage  : %umV", keypad.supplyMv);
-            replyFormat(shell, "  power    : %lumW", keypad.powerMw);
-            replyFormat(shell, "  raw      : current=%u voltage=%u", keypad.currentRaw, keypad.voltageRaw);
+            replyList(shell, "light_power", "state:%s, current_ma:%d, voltage_mv:%u, power_mw:%lu, raw_current:%u, raw_voltage:%u",
+                      KeypadPeripheral::present() ? "ok" : "missing",
+                      keypad.currentMa,
+                      keypad.supplyMv,
+                      keypad.powerMw,
+                      keypad.currentRaw,
+                      keypad.voltageRaw);
             return;
         }
 
@@ -678,7 +690,7 @@ namespace
         }
 
         persistLightConfig();
-        reply(shell, "OK light.updated");
+        replyList(shell, "ok", "light.updated:done");
     }
 
     void handleReset(Shell &shell, const Tokens &tokens)
@@ -688,14 +700,14 @@ namespace
         if (equals(target, "keypad"))
         {
             KeypadPeripheral::hardwareReset();
-            reply(shell, "OK reset.keypad");
+            replyList(shell, "ok", "reset:keypad");
             return;
         }
 
         if (equals(target, "peripherals") || equals(target, "periferics"))
         {
             KeypadPeripheral::hardwareReset();
-            reply(shell, "OK reset.peripherals keypad");
+            replyList(shell, "ok", "reset:peripherals, keypad:done");
             return;
         }
 
@@ -704,13 +716,13 @@ namespace
             DeskSettings::resetDefaults();
             DeskSettings::saveNow();
             KeypadPeripheral::syncStripConfig();
-            reply(shell, "OK reset.settings");
+            replyList(shell, "ok", "reset:settings");
             return;
         }
 
         if (equals(target, "core") || equals(target, "mcu"))
         {
-            reply(shell, "OK reset.core");
+            replyList(shell, "ok", "reset:core");
             delay(20);
             NVIC_SystemReset();
             return;
@@ -721,19 +733,14 @@ namespace
 
     void handleSensorQuery(Shell &shell)
     {
-        replyHeader(shell, "bus sensors");
-        reply(shell, "  0 : ENS160");
-        reply(shell, "  1 : AHT21");
-        reply(shell, "  2 : VEML7700");
-        reply(shell, "  3 : SCD41");
-        reply(shell, "  4 : SHT21");
+        replyList(shell, "bus_sensors", "0:ENS160, 1:AHT21, 2:VEML7700, 3:SCD41, 4:SHT21");
     }
 
     void handleRtcQuery(Shell &shell)
     {
-        replyHeader(shell, "rtc");
-        replyFormat(shell, "  state    : %s", DeskBus::ready(DeskBus::Device::DS3231) ? "ok" : "fail");
-        replyFormat(shell, "  lost_pwr : %s", DeskBus::rtcLostPower() ? "yes" : "no");
+        replyList(shell, "rtc", "state:%s, lost_pwr:%s",
+                  DeskBus::ready(DeskBus::Device::DS3231) ? "ok" : "fail",
+                  DeskBus::rtcLostPower() ? "yes" : "no");
     }
 
     void handleRtc(Shell &shell, const Tokens &tokens)
@@ -747,8 +754,7 @@ namespace
         if (equals(tokens.value[1], "get"))
         {
             const DateTime now = DeskBus::now();
-            replyHeader(shell, "rtc time");
-            replyFormat(shell, "  value    : %04u-%02u-%02uT%02u:%02u:%02u", now.year(), now.month(), now.day(), now.hour(), now.minute(), now.second());
+            replyList(shell, "rtc_time", "value:%04u-%02u-%02uT%02u:%02u:%02u", now.year(), now.month(), now.day(), now.hour(), now.minute(), now.second());
             return;
         }
 
@@ -767,7 +773,14 @@ namespace
                 return;
             }
 
-            reply(shell, DeskBus::setRtc(value) ? "OK rtc.set" : "ERR rtc not ready");
+            if (DeskBus::setRtc(value))
+            {
+                replyList(shell, "ok", "rtc.set:done");
+            }
+            else
+            {
+                reply(shell, "ERR rtc not ready");
+            }
             return;
         }
 
@@ -785,15 +798,9 @@ namespace DeskShellCommands
             return true;
         }
 
-        if (equals(tokens.value[0], "help"))
-        {
-            handleHelp(shell);
-            return true;
-        }
-
         if (equals(tokens.value[0], "ping"))
         {
-            reply(shell, "pong");
+            replyList(shell, "ping", "state:pong");
             return true;
         }
 

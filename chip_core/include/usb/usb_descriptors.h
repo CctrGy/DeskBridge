@@ -13,6 +13,16 @@
   #define DESKBRIDGE_USB_PID 0xDB01
 #endif
 
+// Power declaration ----------------------------------------------------------
+// DeskBridge has its own supply path and a small battery, but may fall back to
+// USB power and charge the battery from VBUS. The standard USB 2.0 configuration
+// descriptor can only declare up to 500 mA in practical host policy terms.
+
+#define DESKBRIDGE_USB_CONFIG_ATTRIBUTES \
+    (TUSB_DESC_CONFIG_ATT_SELF_POWERED | TUSB_DESC_CONFIG_ATT_REMOTE_WAKEUP)
+
+#define DESKBRIDGE_USB_MAX_POWER_MA 500
+
 // Interface layout -----------------------------------------------------------
 // Each CDC ACM consumes 2 interfaces: Communication + Data.
 // HID consumes 1 interface. DeskBridge currently exposes one physical CDC ACM

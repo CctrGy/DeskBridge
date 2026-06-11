@@ -1,8 +1,26 @@
 #include "libs.h"
 
+#include <stdio.h>
 #include <string.h>
 
 #include "commands.h"
+
+namespace
+{
+    const char *stripProtocolPrefix(const char *line)
+    {
+        if (strncmp(line, "[SHL]", 5) == 0 || strncmp(line, "[CMD]", 5) == 0 ||
+            strncmp(line, "[CNF]", 5) == 0 || strncmp(line, "[PRG]", 5) == 0)
+        {
+            line += 5;
+            while (*line == ' ')
+            {
+                ++line;
+            }
+        }
+        return line;
+    }
+}
 
 void Shell::begin(ReadFn readFn, WriteFn writeFn)
 {
@@ -13,7 +31,8 @@ void Shell::begin(ReadFn readFn, WriteFn writeFn)
 
     if (ready_)
     {
-        writeLine("DeskBridge shell ready");
+        writeLine("[INF] DeskBridge shell ready");
+        writeLine("[MRK] 0xA001 shell.begin");
         writePrompt();
     }
 }
@@ -79,7 +98,7 @@ void Shell::processByte(char value)
 
     if (lineLength_ >= sizeof(line_) - 1)
     {
-        writeLine("ERR line too long");
+        writeLine("[ERR] 0xE001 line too long");
         resetLine();
         writePrompt();
         return;
@@ -97,18 +116,21 @@ void Shell::processLine()
         return;
     }
 
-    if (!DeskShellCommands::handle(line_, *this))
+    const char *commandLine = stripProtocolPrefix(line_);
+    if (!DeskShellCommands::handle(commandLine, *this))
     {
         char response[Parser::MAX_RESPONSE_SIZE] = {};
-        parser_.processCommand(line_, response);
+        parser_.processCommand(commandLine, response);
 
         if (response[0] != '\0')
         {
-            writeLine(response);
+            char wrapped[Parser::MAX_RESPONSE_SIZE + 8] = {};
+            snprintf(wrapped, sizeof(wrapped), "[RSP] %s", response);
+            writeLine(wrapped);
         }
         else
         {
-            writeLine("ERR unknown command");
+            writeLine("[ERR] 0xE002 unknown command");
         }
     }
 
