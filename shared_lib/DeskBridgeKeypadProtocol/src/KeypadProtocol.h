@@ -10,6 +10,8 @@ namespace DeskBridgeKeypadProtocol
     constexpr uint8_t ProtocolVersion = 0x03;
     constexpr const char *ProtocolText = "TXT1";
     constexpr uint8_t DeviceId = 66;
+    constexpr const char *DeviceName = "CHIP_KEYPAD";
+    constexpr const char *FirmwareVersion = "0.3.0";
     constexpr uint8_t ButtonCount = 5;
 
     namespace Command
@@ -58,6 +60,8 @@ namespace DeskBridgeKeypadProtocol
         constexpr const char *Device = "DEV=";
         constexpr const char *Protocol = "PROTO=";
         constexpr const char *Name = "NAME=";
+        constexpr const char *Firmware = "FW=";
+        constexpr const char *ProtocolVersion = "PV=";
         constexpr const char *Enabled = "EN=";
         constexpr const char *Mode = "MODE=";
         constexpr const char *Brightness = "VAL=";
@@ -84,6 +88,8 @@ namespace DeskBridgeKeypadProtocol
         constexpr const char *ButtonDown = "BD=";
         constexpr const char *LastButton = "LB=";
         constexpr const char *ButtonEdge = "BE=";
+        constexpr const char *ButtonEventCode = "EC=";
+        constexpr const char *ActionId = "AID=";
         constexpr const char *Action = "ACT=";
         constexpr const char *AvailableCount = "N=";
     }

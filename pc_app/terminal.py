@@ -1,4 +1,4 @@
-"""Compatibility entry point for the DeskBridge CLI."""
+"""Unified DeskBridge application entry point."""
 
 from __future__ import annotations
 

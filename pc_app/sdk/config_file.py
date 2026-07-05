@@ -5,14 +5,35 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from .paths import data_dir
+
 
 DEFAULT_CONTENT = """{
   last_connection: None
   log_level: INFO
   language: english
-  terminal_palette: default
-  history_limit: 200
-  history_visual_size: 25
+  terminal_color: on
+  terminal_palette: dark
+  history_limit: 256
+  history_visual_size: 16
+  connect: disconnected
+  functionKey: on
+  terminal_cols: 120
+  terminal_lines: 31
+  backend_autoconnect: on
+  backend_foreground_suspend: 600
+  backend_monitor: on
+  backend_notification_cooldown: 300
+  backend_notify_co2: on
+  backend_notify_humidity: on
+  backend_notify_lux: on
+  backend_notify_temperature: on
+  backend_poll_interval: 30
+  gui_key_0_action: none
+  gui_key_1_action: none
+  gui_key_2_action: none
+  gui_key_3_action: none
+  gui_key_4_action: none
 }
 """
 
@@ -24,7 +45,7 @@ class AppConfig:
 
     @classmethod
     def default_path(cls) -> Path:
-        return Path(__file__).resolve().parents[1] / "data" / "data.config"
+        return data_dir() / "data.config"
 
     @classmethod
     def load(cls, path: Path | None = None) -> "AppConfig":
@@ -51,6 +72,28 @@ class AppConfig:
         self.save()
 
     @property
+    def connect_state(self) -> str:
+        value = str(self.values.get("connect") or "disconnected").lower()
+        return "connected" if value == "connected" else "disconnected"
+
+    @property
+    def should_auto_connect(self) -> bool:
+        return self.connect_state == "connected"
+
+    def set_connect_state(self, connected: bool) -> None:
+        self.values["connect"] = "connected" if connected else "disconnected"
+        self.save()
+
+    @property
+    def function_key_active(self) -> bool:
+        value = str(self.values.get("functionKey") or "on").lower()
+        return value in {"active", "on", "1", "true", "yes", "si"}
+
+    def set_function_key_active(self, active: bool) -> None:
+        self.values["functionKey"] = "on" if active else "off"
+        self.save()
+
+    @property
     def log_level(self) -> str:
         value = self.values.get("log_level")
         return str(value or "INFO").upper()
@@ -69,11 +112,26 @@ class AppConfig:
 
     @property
     def terminal_palette(self) -> str:
-        return str(self.values.get("terminal_palette") or "default").lower()
+        value = str(self.values.get("terminal_palette") or "dark").lower()
+        return "dark" if value == "darck" else value
+
+    def set_terminal_palette(self, palette: str) -> None:
+        normalized = palette.lower()
+        self.values["terminal_palette"] = "dark" if normalized == "darck" else normalized
+        self.save()
+
+    @property
+    def terminal_color(self) -> bool:
+        value = str(self.values.get("terminal_color") or "on").lower()
+        return value in {"on", "1", "true", "yes", "si"}
+
+    def set_terminal_color(self, enabled: bool) -> None:
+        self.values["terminal_color"] = "on" if enabled else "off"
+        self.save()
 
     @property
     def history_limit(self) -> int:
-        return self._int_value("history_limit", 200, minimum=1)
+        return self._int_value("history_limit", 256, minimum=1)
 
     def set_history_limit(self, value: int) -> None:
         self.values["history_limit"] = str(max(1, value))
@@ -81,10 +139,23 @@ class AppConfig:
 
     @property
     def history_visual_size(self) -> int:
-        return self._int_value("history_visual_size", 25, minimum=1)
+        return self._int_value("history_visual_size", 16, minimum=1)
 
     def set_history_visual_size(self, value: int) -> None:
         self.values["history_visual_size"] = str(max(1, value))
+        self.save()
+
+    @property
+    def terminal_cols(self) -> int:
+        return self._int_value("terminal_cols", 120, minimum=80)
+
+    @property
+    def terminal_lines(self) -> int:
+        return self._int_value("terminal_lines", 31, minimum=24)
+
+    def set_terminal_size(self, cols: int, lines: int) -> None:
+        self.values["terminal_cols"] = str(max(80, cols))
+        self.values["terminal_lines"] = str(max(24, lines))
         self.save()
 
     def _int_value(self, key: str, default: int, *, minimum: int) -> int:
@@ -110,9 +181,28 @@ def default_values() -> dict[str, str | None]:
         "last_connection": None,
         "log_level": "INFO",
         "language": "english",
-        "terminal_palette": "default",
-        "history_limit": "200",
-        "history_visual_size": "25",
+        "terminal_color": "on",
+        "terminal_palette": "dark",
+        "history_limit": "256",
+        "history_visual_size": "16",
+        "connect": "disconnected",
+        "functionKey": "on",
+        "terminal_cols": "120",
+        "terminal_lines": "31",
+        "backend_autoconnect": "on",
+        "backend_foreground_suspend": "600",
+        "backend_monitor": "on",
+        "backend_notification_cooldown": "300",
+        "backend_notify_co2": "on",
+        "backend_notify_humidity": "on",
+        "backend_notify_lux": "on",
+        "backend_notify_temperature": "on",
+        "backend_poll_interval": "30",
+        "gui_key_0_action": "none",
+        "gui_key_1_action": "none",
+        "gui_key_2_action": "none",
+        "gui_key_3_action": "none",
+        "gui_key_4_action": "none",
     }
 
 

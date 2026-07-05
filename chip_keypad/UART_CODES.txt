@@ -1,0 +1,80 @@
+CHIP_KEYPAD UART event codes
+============================
+
+UART:
+- Serial2
+- Baud: 115200
+- Format: 8N1
+- RX: PA2
+- TX: PA3
+
+Button event code format:
+- Bx,EVENT
+
+Note:
+- These codes are the semantic names for button events.
+- The CORE-compatible firmware stores these events and exposes them through EVT? and BTN?.
+- It does not continuously stream Bx,EVENT lines while the CORE command/response protocol is active.
+
+Button index:
+- B0 = PB3
+- B1 = PA12
+- B2 = PA11
+- B3 = PA7
+- B4 = PA6
+
+Events:
+- PRESSED
+- SHORT_RELEASED
+- LONG_RELEASED
+- ALL
+
+Codes:
+- B0,PRESSED
+- B0,SHORT_RELEASED
+- B0,LONG_RELEASED
+- B1,PRESSED
+- B1,SHORT_RELEASED
+- B1,LONG_RELEASED
+- B2,PRESSED
+- B2,SHORT_RELEASED
+- B2,LONG_RELEASED
+- B3,PRESSED
+- B3,SHORT_RELEASED
+- B3,LONG_RELEASED
+- B4,PRESSED
+- B4,SHORT_RELEASED
+- B4,LONG_RELEASED
+
+Signal pins:
+- EVENT = PA1
+  Goes HIGH when one or more button events are pending.
+  Goes LOW when CORE reads EVT?/BTN? or sends SCL.
+- STATE = PB0
+  HIGH while one or more buttons are pressed.
+
+CORE query examples:
+- EVT?
+  OK EVT=512 BP=1 BR=0 BD=1 LB=0 BE=1
+
+- BTN?
+  OK BP=0 BR=1 BD=0 LB=0 BE=2
+
+Event enable/disable commands:
+- EVENT?
+  Returns enabled event masks for all buttons.
+
+- EVENT B0 SHORT_RELEASED disabled
+  Ignores B0 short release events.
+
+- EVENT B0 SHORT_RELEASED enabled
+  Enables B0 short release events again.
+
+- EVENT B2 ALL disabled
+  Ignores all B2 events.
+
+Event mask values:
+- PRESSED = 1
+- SHORT_RELEASED = 2
+- LONG_RELEASED = 4
+- ALL = 7

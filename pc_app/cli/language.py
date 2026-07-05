@@ -6,10 +6,12 @@ import json
 from pathlib import Path
 
 from sdk.config_file import AppConfig
+from sdk.paths import data_dir
 
 
-LANGUAGE_DIR = Path(__file__).resolve().parents[1] / "data" / "settings" / "languaje"
-LANGUAGE_CONFIG = LANGUAGE_DIR / "languaje.config"
+LANGUAGE_DIR = data_dir() / "settings" / "language"
+LEGACY_LANGUAGE_DIR = data_dir() / "settings" / "languaje"
+LANGUAGE_CONFIG = LANGUAGE_DIR / "language.config"
 DEFAULT_LANGUAGE = "english"
 
 
@@ -25,8 +27,14 @@ class LanguageManager:
     """Load and persist the selected CLI language."""
 
     def __init__(self, directory: Path = LANGUAGE_DIR) -> None:
+        if not directory.exists() and LEGACY_LANGUAGE_DIR.exists():
+            directory = LEGACY_LANGUAGE_DIR
         self.directory = directory
-        self.config_path = directory / "languaje.config"
+        self.config_path = directory / "language.config"
+        if not self.config_path.exists():
+            legacy_config = directory / "languaje.config"
+            if legacy_config.exists():
+                self.config_path = legacy_config
         self.app_config = AppConfig.load()
         self.directory.mkdir(parents=True, exist_ok=True)
         self.available = self._load_available()
@@ -52,6 +60,13 @@ class LanguageManager:
     def names(self) -> list[str]:
         return sorted(self.available)
 
+    def reload(self) -> None:
+        self.available = self._load_available()
+        if self.current not in self.available:
+            self.current = self._load_current()
+        self.strings = self.load(self.current)
+        self._save_current()
+
     def t(self, key: str, default: str | None = None) -> str:
         return self.strings.text(key, default)
 
@@ -68,6 +83,9 @@ class LanguageManager:
             if key == "selected":
                 continue
             values[key] = value
+        for path in sorted(self.directory.glob("*.json")):
+            name = path.stem.removeprefix("shell_").lower()
+            values.setdefault(name, path.name)
         return values or {DEFAULT_LANGUAGE: "shell_english.json"}
 
     def _load_current(self) -> str:
@@ -89,7 +107,7 @@ class LanguageManager:
 
 def ensure_default_language_files(directory: Path) -> None:
     directory.mkdir(parents=True, exist_ok=True)
-    config = directory / "languaje.config"
+    config = directory / "language.config"
     english = directory / "shell_english.json"
     spanish = directory / "shell_español.json"
 
@@ -116,6 +134,7 @@ ENGLISH_STRINGS = {
     "help.local.disconnect": "disconnect through the SDK",
     "help.local.reconnect": "reconnect",
     "help.local.status": "show CLI/SDK status",
+    "help.local.backend": "manage resident background process",
     "help.local.settings": "show or change CLI settings",
     "help.local.paths": "show runtime and main file paths",
     "help.local.history": "show command history",
@@ -126,10 +145,12 @@ ENGLISH_STRINGS = {
     "help.periferic.info": "general chip information",
     "help.periferic.usb": "USB status",
     "help.periferic.program": "firmware version and build",
+    "help.periferic.display": "OLED display settings",
     "help.periferic.periferic": "internal chip status",
     "help.periferic.bus": "sensor bus",
     "help.periferic.keypad": "keypad status",
     "help.periferic.light": "light and power manager",
+    "help.periferic.wireless": "BLE wireless link",
     "help.periferic.reset": "controlled reset",
     "help.periferic.rtc": "RTC clock",
     "cli.started": "Type help to list commands.",
@@ -148,6 +169,7 @@ SPANISH_STRINGS = {
     "help.local.disconnect": "desconecta por SDK",
     "help.local.reconnect": "reconecta",
     "help.local.status": "muestra estado del CLI/SDK",
+    "help.local.backend": "gestiona el programa residente en segundo plano",
     "help.local.settings": "muestra o cambia ajustes del CLI",
     "help.local.paths": "muestra rutas de ejecución y archivo principal",
     "help.local.history": "muestra comandos usados",
@@ -158,10 +180,12 @@ SPANISH_STRINGS = {
     "help.periferic.info": "información general del chip",
     "help.periferic.usb": "estado USB",
     "help.periferic.program": "versión y build del firmware",
+    "help.periferic.display": "ajustes de la pantalla OLED",
     "help.periferic.periferic": "estado de chips internos",
     "help.periferic.bus": "bus de sensores",
     "help.periferic.keypad": "estado del keypad",
     "help.periferic.light": "luz y power manager",
+    "help.periferic.wireless": "enlace inalambrico BLE",
     "help.periferic.reset": "reinicio controlado",
     "help.periferic.rtc": "reloj RTC",
     "cli.started": "Escribe help para ver comandos.",

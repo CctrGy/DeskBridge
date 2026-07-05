@@ -4,14 +4,17 @@ from __future__ import annotations
 
 import re
 
+from .headers import KNOWN_FIRMWARE_HEADERS
 from .messages import (
     ErrorMessage,
     EventMessage,
     LogMessage,
+    MarkerMessage,
     Message,
     MessageKind,
     PromptMessage,
     ResponseMessage,
+    TuiNotificationMessage,
     UnknownMessage,
     ValueMessage,
 )
@@ -22,7 +25,10 @@ class ProtocolParser:
 
     prompt = "db>"
 
-    _channel_re = re.compile(r"^\[(SHL|CMD|CNF|PRG|RSP|LOG|EVT|TSK|DAT|MRK|ERR|STE|STK|INF)]\s*(.*)$")
+    _channel_re = re.compile(
+        rf"^\[({'|'.join(sorted(KNOWN_FIRMWARE_HEADERS))})]\s*(.*)$",
+        re.IGNORECASE,
+    )
     _event_re = re.compile(r"^\[EVENT\s+(.+)]$")
     _log_re = re.compile(r"^\[LOG]\s*(.*)$")
     _value_re = re.compile(r"^\[value\s+([^\s]+)\s+(.+)]$")
@@ -42,13 +48,12 @@ class ProtocolParser:
 
         channel_match = self._channel_re.match(text)
         if channel_match:
-            channel = channel_match.group(1)
+            channel = channel_match.group(1).upper()
             payload = channel_match.group(2).strip()
             if channel == "RSP":
                 return self.parse_line(payload)
             if channel == "ERR":
-                detail = payload
-                code = detail.split(maxsplit=1)[0] if detail else "ERR"
+                code, detail = split_code_payload(payload)
                 return ErrorMessage(MessageKind.ERROR, raw, code, detail)
             if channel == "LOG":
                 return LogMessage(MessageKind.LOG, raw, payload)
@@ -56,18 +61,25 @@ class ProtocolParser:
                 tokens = tuple(payload.split())
                 name = tokens[0] if tokens else ""
                 return EventMessage(MessageKind.EVENT, raw, name, tokens[1:])
+            if channel == "TFI":
+                code, summary, detail = split_notification_payload(payload)
+                return TuiNotificationMessage(MessageKind.TUI_NOTIFICATION, raw, code, summary, detail)
+            if channel == "MRK":
+                code, text_value = split_code_payload(payload)
+                return MarkerMessage(MessageKind.DATA, raw, code, text_value)
             if channel in {"DAT", "STE", "STK"}:
                 if ":" in payload:
                     key, value = payload.split(":", 1)
-                    return ValueMessage(MessageKind.VALUE, raw, key.strip(), self.parse_mapping(value.strip()))
+                    parsed_value = self.parse_mapping(value.strip()) if ":" in value else self.parse_scalar(value)
+                    return ValueMessage(MessageKind.VALUE, raw, key.strip(), parsed_value)
                 return ValueMessage(MessageKind.VALUE, raw, channel.lower(), self.parse_scalar(payload))
             if channel in {"MRK", "INF", "TSK"}:
                 return ResponseMessage(MessageKind.DATA, raw, True, payload)
+            return ResponseMessage(MessageKind.DATA, raw, True, payload)
 
         if text.startswith("ERR"):
             parts = text.split(maxsplit=1)
-            detail = parts[1] if len(parts) > 1 else ""
-            code = detail.split(maxsplit=1)[0] if detail else "ERR"
+            code, detail = split_code_payload(parts[1] if len(parts) > 1 else "")
             return ErrorMessage(MessageKind.ERROR, raw, code, detail)
 
         if text.startswith("OK"):
@@ -146,3 +158,22 @@ class ProtocolParser:
             key, raw_value = item.split(":", 1)
             values[key.strip()] = cls.parse_scalar(raw_value.strip())
         return values
+
+
+def split_code_payload(payload: str) -> tuple[str, str]:
+    parts = payload.split(maxsplit=1)
+    if not parts:
+        return "", ""
+    if len(parts) == 1:
+        return parts[0], ""
+    return parts[0], parts[1]
+
+
+def split_notification_payload(payload: str) -> tuple[str, str, str]:
+    """Parse `[TFI] CODE summary | detail` with safe fallbacks."""
+
+    code, text = split_code_payload(payload)
+    if "|" in text:
+        summary, detail = text.split("|", 1)
+        return code, summary.strip(), detail.strip()
+    return code, text.strip(), text.strip()

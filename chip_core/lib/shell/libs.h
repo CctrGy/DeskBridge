@@ -21,6 +21,9 @@ public:
     bool ready() const;
     void write(const char *text);
     void writeLine(const char *text);
+    void writeAsyncLine(const char *text);
+    void writeTuiNotification(const char *code, const char *summary, const char *detail);
+    void writeAsyncTuiNotification(const char *code, const char *summary, const char *detail);
 
 private:
     void processByte(char value);

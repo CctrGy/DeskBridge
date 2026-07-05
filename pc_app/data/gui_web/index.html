@@ -1,0 +1,258 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DeskBridge</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="custom-titlebar" id="dragTitlebar">
+    <div class="title-brand">
+      <div class="title-mark"><span>D</span><span class="mark-b">B</span></div>
+      <div class="title-word">DeskBridge</div>
+    </div>
+    <div class="title-status">
+      <span class="status-dot"></span>
+      <div>
+        <strong id="titleStatusText">Disconnected</strong>
+        <span id="titleDeviceText">DeskBridge Core</span>
+      </div>
+    </div>
+    <div class="window-controls">
+      <button id="minimizeWindowBtn" class="window-control" type="button" aria-label="Minimize">-</button>
+      <button id="closeWindowBtn" class="window-control close" type="button" aria-label="Close">x</button>
+    </div>
+  </header>
+
+  <main class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div>
+          <h1>DeskBridge</h1>
+          <p>Control Center</p>
+        </div>
+      </div>
+
+      <section class="action-group">
+        <button id="connectionToggleBtn" class="primary">Connect</button>
+        <button id="settingsBtn">Connection Config.</button>
+      </section>
+
+      <nav class="nav-list">
+        <button class="nav-item active" data-panel="overviewPanel">Overview</button>
+        <button class="nav-item" data-panel="rtcPanel">RTC</button>
+        <button class="nav-item" data-panel="busPanel">Sensor bus</button>
+        <button class="nav-item" data-panel="keypadPanel">Keypad</button>
+        <button class="nav-item" data-panel="lightPanel">Light</button>
+        <button class="nav-item" data-panel="wirelessPanel">Wireless</button>
+        <button class="nav-item" data-panel="systemPanel">System</button>
+        <button class="nav-item" data-panel="rawPanel">USB Raw</button>
+        <button class="nav-item" data-panel="settingsPanel">Settings</button>
+      </nav>
+    </aside>
+
+    <section class="workspace">
+      <header class="topbar">
+        <div><span class="label">Status</span><strong id="statusText">Disconnected</strong></div>
+        <div><span class="label">Port</span><strong id="portText">Auto</strong></div>
+        <div><span class="label">VID/PID</span><strong id="usbIdText">1209:DB01</strong></div>
+        <div><span class="label">RTC</span><strong id="rtcText">--:--:--</strong></div>
+      </header>
+
+      <section class="cards">
+        <article class="metric-card"><span>Firmware</span><strong id="firmwareText">-</strong></article>
+        <article class="metric-card"><span>Protocol</span><strong id="protocolText">-</strong></article>
+        <article class="metric-card"><span>Profile</span><strong id="profileText">Default</strong></article>
+        <article class="metric-card"><span>Notifications</span><strong id="notificationCount">0</strong></article>
+      </section>
+
+      <section id="overviewPanel" class="panel view-panel active">
+        <div class="panel-title">
+          <h2>Overview</h2>
+          <div class="button-row">
+            <button data-command="core.ping">Ping</button>
+            <button data-command="core.info">Info</button>
+            <button data-command="core.usb">USB</button>
+            <button data-command="core.program">Program</button>
+          </div>
+        </div>
+        <div class="form-grid">
+          <label>OLED window design
+            <select id="oledLayout">
+              <option>Home monitor</option>
+              <option>Clock + status</option>
+              <option>Sensor dashboard</option>
+              <option>Wireless link</option>
+              <option>Developer diagnostics</option>
+            </select>
+          </label>
+          <label>Temperature unit
+            <select id="temperatureUnit">
+              <option>Celsius (C)</option>
+              <option>Fahrenheit (F)</option>
+            </select>
+          </label>
+          <label>Sensor samples
+            <select id="sensorSamples">
+              <option>1</option><option>2</option><option selected>3</option><option>4</option><option>8</option><option>16</option>
+            </select>
+          </label>
+          <label>Read interval
+            <select id="readInterval">
+              <option>500ms</option><option selected>1000ms</option><option>2s</option><option>5s</option><option>10s</option>
+            </select>
+          </label>
+        </div>
+        <div class="button-row footer-row">
+          <button id="savePrefsBtn" class="primary">Save GUI preferences</button>
+        </div>
+      </section>
+
+      <section id="rtcPanel" class="panel view-panel">
+        <div class="panel-title"><h2>RTC</h2></div>
+        <div class="control-grid">
+          <button data-command="rtc.status">Status</button>
+          <button data-command="rtc.get">Get date/time</button>
+          <button data-command="rtc.sync" class="primary">Sync with PC</button>
+          <label>Set full datetime <input id="rtcDateTime" placeholder="2026-05-30T18:45:00"></label>
+          <button data-command="rtc.set" data-value="#rtcDateTime">Set datetime</button>
+          <label>Set date <input id="rtcDate" placeholder="30/05/2026"></label>
+          <button data-command="rtc.set_date" data-value="#rtcDate">Set date</button>
+          <label>Set time <input id="rtcTime" placeholder="18:45:00"></label>
+          <button data-command="rtc.set_time" data-value="#rtcTime">Set time</button>
+        </div>
+      </section>
+
+      <section id="busPanel" class="panel view-panel">
+        <div class="panel-title"><h2>Sensor bus</h2></div>
+        <div class="control-grid">
+          <button data-command="bus.get">Bus state</button>
+          <button data-command="bus.scan">I2C scan</button>
+          <button data-command="bus.sensors">Sensor list</button>
+          <label>Sensor selector <select id="sensorSelector"></select></label>
+          <button data-command="bus.sensor" data-selector="#sensorSelector">Read sensor</button>
+          <button data-command="bus.time_read.get">Get read interval</button>
+          <label>Read interval <input id="busTimeRead" value="1000ms"></label>
+          <button data-command="bus.time_read.set" data-value="#busTimeRead">Set read interval</button>
+          <button data-command="bus.samples.get">Get samples</button>
+          <label>Samples <input id="busSamples" type="number" min="1" value="3"></label>
+          <button data-command="bus.samples.set" data-value="#busSamples">Set samples</button>
+        </div>
+      </section>
+
+      <section id="keypadPanel" class="panel view-panel">
+        <div class="panel-title"><h2>Keypad</h2></div>
+        <div class="key-action-grid">
+          <label>KEY 0 <select class="key-action-select" data-key-index="0"></select></label>
+          <label>KEY 1 <select class="key-action-select" data-key-index="1"></select></label>
+          <label>KEY 2 <select class="key-action-select" data-key-index="2"></select></label>
+          <label>KEY 3 <select class="key-action-select" data-key-index="3"></select></label>
+          <label>KEY 4 <select class="key-action-select" data-key-index="4"></select></label>
+        </div>
+        <div class="button-row footer-row">
+          <button id="saveKeyPrefsBtn">Save KEY preferences</button>
+          <button id="applyKeyActionsBtn" class="primary">Apply to CORE</button>
+        </div>
+        <div class="control-grid">
+          <button data-command="keypad.get">Keypad state</button>
+          <button data-command="keypad.action.list">Action list</button>
+          <label>Button index <input id="keypadButton" type="number" min="0" value="0"></label>
+          <label>Action <select id="keypadAction"></select></label>
+          <button data-command="keypad.action.set" data-button="#keypadButton" data-action-value="#keypadAction">Set button action</button>
+        </div>
+      </section>
+
+      <section id="lightPanel" class="panel view-panel">
+        <div class="panel-title"><h2>Light / power</h2></div>
+        <div class="control-grid">
+          <button data-command="light.get">Light state</button>
+          <button data-command="light.power">Power</button>
+          <button data-command="light.sync">Sync</button>
+          <label>Field <select id="lightField"></select></label>
+          <label>Value <input id="lightValue" placeholder="on, 80, 4200..."></label>
+          <button data-command="light.set" data-field="#lightField" data-value="#lightValue">Set field</button>
+        </div>
+      </section>
+
+      <section id="wirelessPanel" class="panel view-panel">
+        <div class="panel-title"><h2>Wireless</h2></div>
+        <div class="control-grid">
+          <button data-command="wireless.get">Get config</button>
+          <button data-command="wireless.state">State</button>
+          <button data-command="wireless.on">On</button>
+          <button data-command="wireless.off">Off</button>
+          <button data-command="wireless.pair" class="primary">Pair</button>
+          <button data-command="wireless.enabled.get">Get enabled</button>
+          <label>Enabled <select id="wirelessEnabledValue"><option>on</option><option>off</option></select></label>
+          <button data-command="wireless.enabled.set" data-value="#wirelessEnabledValue">Set enabled</button>
+          <button data-command="wireless.name.get">Get name</button>
+          <label>BLE name <input id="wirelessName" value="DeskBridge"></label>
+          <button data-command="wireless.name.set" data-value="#wirelessName">Set name</button>
+          <label>Write text <input id="wirelessWrite" placeholder="Text to BLE link"></label>
+          <button data-command="wireless.write" data-value="#wirelessWrite">Write</button>
+          <button data-command="wireless.rx">Read RX</button>
+          <button data-command="wireless.apply">Apply</button>
+        </div>
+      </section>
+
+      <section id="systemPanel" class="panel view-panel">
+        <div class="panel-title"><h2>System</h2></div>
+        <div class="control-grid">
+          <button data-command="system.local">Local chip</button>
+          <button data-command="system.peripherals">Internal peripherals</button>
+          <label>Reset target <select id="resetTarget"></select></label>
+          <button data-command="reset.run" data-target="#resetTarget" class="danger">Reset target</button>
+        </div>
+      </section>
+
+      <section id="rawPanel" class="panel view-panel notifications-panel">
+        <div class="panel-title">
+          <h2>USB Raw</h2>
+          <button id="clearNotificationsBtn">Clear notifications</button>
+        </div>
+        <div class="notification-list" id="notifications"></div>
+      </section>
+
+      <section id="settingsPanel" class="panel view-panel">
+        <div class="panel-title"><h2>Settings</h2></div>
+        <div class="settings-grid">
+          <section class="settings-section inline-section">
+            <h3>Background program</h3>
+            <label class="checkbox-row"><input id="backendStartupEnabled" type="checkbox"> Start with Windows</label>
+            <p class="hint">Controls the resident tray backend used for Windows alerts.</p>
+            <button id="saveBackendStartupBtn" class="primary" type="button">Apply background state</button>
+          </section>
+          <section class="settings-section inline-section">
+            <h3>Backend alerts</h3>
+            <label class="checkbox-row"><input id="backendNotifyTemperature" type="checkbox"> Temperature</label>
+            <label class="checkbox-row"><input id="backendNotifyHumidity" type="checkbox"> Humidity</label>
+            <label class="checkbox-row"><input id="backendNotifyCo2" type="checkbox"> CO2</label>
+            <label class="checkbox-row"><input id="backendNotifyLux" type="checkbox"> LUX</label>
+            <p class="hint">Ranges and alert conditions are configured in the peripheral.</p>
+            <button type="button" id="saveBackendAlertsBtn" class="primary">Save notification filters</button>
+          </section>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <dialog id="settingsDialog">
+    <form method="dialog" class="settings-window">
+      <header><h2>Connection Config.</h2><button value="close" aria-label="Close">x</button></header>
+      <section class="settings-section">
+        <label>Detected port <select id="portSelect"></select></label>
+        <div class="button-row">
+          <button type="button" id="rescanPortsBtn">Rescan</button>
+          <button type="button" id="settingsConnectBtn">Connect</button>
+          <button type="button" id="settingsDisconnectBtn">Disconnect</button>
+        </div>
+      </section>
+      <footer><button value="close">Close</button></footer>
+    </form>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>
+

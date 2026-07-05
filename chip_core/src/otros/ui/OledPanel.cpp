@@ -14,6 +14,7 @@
 #include "light/StripLight.h"
 #include "ui/OledDisplay.h"
 #include "usb/DeskUSB.h"
+#include <Antenna.hpp>
 
 namespace
 {
@@ -21,6 +22,12 @@ namespace
     {
         Home,
         MainMenu,
+        WirelessMenu,
+        WirelessEnabled,
+        WirelessBleName,
+        WirelessPairing,
+        WirelessState,
+        WirelessApply,
         UsbInfo,
         LightMenu,
         LightEnabled,
@@ -75,6 +82,7 @@ namespace
         DisplayActiveStart,
         DisplayActiveEnd,
         DisplayTimeout,
+        DisplayFrameRate,
         TemperatureUnit,
         SystemSensorsMenu,
         SensorSampleInterval,
@@ -97,8 +105,22 @@ namespace
     {
         MainLight,
         MainButtons,
+        MainWireless,
+        MainDisplay,
+        MainNotifications,
         MainSystem,
         MainOptionCount,
+    };
+
+    enum WirelessOption : uint8_t
+    {
+        WirelessEnabledOption,
+        WirelessBleNameOption,
+        WirelessPairingOption,
+        WirelessStateOption,
+        WirelessApplyOption,
+        WirelessBack,
+        WirelessOptionCount,
     };
 
     enum LightOption : uint8_t
@@ -192,8 +214,6 @@ namespace
 
     enum SystemOption : uint8_t
     {
-        SystemDisplay,
-        SystemNotifications,
         SystemPeriferics,
         SystemBus,
         SystemUsb,
@@ -210,6 +230,7 @@ namespace
         DisplayActiveModeOption,
         DisplayActiveStartOption,
         DisplayActiveEndOption,
+        DisplayFrameRateOption,
         DisplayBack,
         DisplayOptionCount,
     };
@@ -300,7 +321,19 @@ namespace
     const char *const mainOptions[MainOptionCount] = {
         "Light",
         "Buttons",
+        "Wireless",
+        "Display",
+        "Notifications",
         "System",
+    };
+
+    const char *const wirelessOptions[WirelessOptionCount] = {
+        "Enabled",
+        "BLE name",
+        "Pairing",
+        "State",
+        "Apply",
+        "Back",
     };
 
     const char *const lightOptions[LightOptionCount] = {
@@ -375,8 +408,6 @@ namespace
     };
 
     const char *const systemOptions[SystemOptionCount] = {
-        "Display",
-        "Notifications",
         "Periferics",
         "Bus",
         "USB",
@@ -391,6 +422,7 @@ namespace
         "Active mode",
         "Clock start",
         "Clock end",
+        "Frame FPS",
         "Back",
     };
 
@@ -492,6 +524,7 @@ namespace
     constexpr uint32_t statusRedrawIntervalMs = DISPLAY_STATUS_REDRAW_INTERVAL_MS_DEFAULT;
 
     uint8_t selectedMain = MainLight;
+    uint8_t selectedWireless = WirelessEnabledOption;
     uint8_t selectedLight = LightEnabledOption;
     uint8_t selectedLightBrightness = LightBrightnessValueOption;
     uint8_t selectedLightKelvin = LightKelvinValueOption;
@@ -502,7 +535,7 @@ namespace
     uint8_t selectedRtc = RtcAdjustTime;
     uint8_t selectedRtcAlarm = RtcAlarmListOption;
     uint8_t selectedRtcAlarmEdit = RtcAlarmEditOptionItem;
-    uint8_t selectedSystem = SystemDisplay;
+    uint8_t selectedSystem = SystemPeriferics;
     uint8_t selectedDisplay = DisplayDesignOption;
     uint8_t selectedPeriferics = PerifericsKeypad;
     uint8_t selectedKeypad = KeypadInfoOption;
@@ -540,6 +573,9 @@ namespace
             case Screen::Home:
                 return homeRedrawIntervalMs;
             case Screen::UsbInfo:
+            case Screen::WirelessState:
+            case Screen::WirelessPairing:
+            case Screen::WirelessApply:
             case Screen::ChipInfo:
             case Screen::KeypadInfo:
             case Screen::KeypadReset:
@@ -627,6 +663,13 @@ namespace
                 return "home";
             case Screen::MainMenu:
                 return "menu";
+            case Screen::WirelessMenu:
+            case Screen::WirelessEnabled:
+            case Screen::WirelessBleName:
+            case Screen::WirelessPairing:
+            case Screen::WirelessState:
+            case Screen::WirelessApply:
+                return "menu/wireless";
             case Screen::UsbInfo:
                 return "menu/system/usb";
             case Screen::LightMenu:
@@ -693,7 +736,7 @@ namespace
             case Screen::DisplayActiveStart:
             case Screen::DisplayActiveEnd:
             case Screen::DisplayTimeout:
-                return "menu/system/display";
+                return "menu/display";
             case Screen::SystemPerifericsMenu:
                 return "menu/system/periferics";
             case Screen::KeypadMenu:
@@ -710,7 +753,7 @@ namespace
             case Screen::SystemNotificationMenu:
             case Screen::SystemNotificationEdit:
             case Screen::SystemNotificationDelete:
-                return "menu/system/notify";
+                return "menu/notifications";
             case Screen::SystemHomeViewMenu:
                 return "menu/system/home";
             default:
@@ -841,7 +884,7 @@ namespace
         const int barH = 8;
         const int barX = (128 - barW) / 2;
         const int barY = 50;
-        const uint32_t elapsed = min(millis() - bootStartMs, bootDurationMs);
+        const uint32_t elapsed = min(static_cast<uint32_t>(millis() - bootStartMs), bootDurationMs);
         const int fillW = map(elapsed, 0, bootDurationMs, 0, barW - 2);
         const uint8_t bootPixelSteps = 9;
         const uint8_t bootPixelStep = min(static_cast<uint32_t>(bootPixelSteps - 1),
@@ -1296,6 +1339,53 @@ namespace
         Oled.sendBuffer();
     }
 
+    void drawWirelessState(const char *title = "Wireless")
+    {
+        Oled.clearBuffer();
+        drawTitle(title);
+        Oled.setFont(OledFont::Small);
+        Oled.setCursor(0, 19);
+        Oled.print("Enabled: ");
+        Oled.print(WirelessAntenna.enabled() ? "YES" : "NO");
+        Oled.setCursor(0, 30);
+        Oled.print("Mode: ");
+        Oled.print(WirelessAntenna.modeText());
+        Oled.setCursor(0, 41);
+        Oled.print("State: ");
+        Oled.print(WirelessAntenna.stateText());
+        Oled.setCursor(0, 52);
+        Oled.print("BLE client: ");
+        Oled.print(WirelessAntenna.bleConnected() ? "ON" : "--");
+        Oled.setCursor(0, 63);
+        Oled.print("ESC: back");
+        Oled.sendBuffer();
+    }
+
+    void drawWirelessEnabled()
+    {
+        Oled.clearBuffer();
+        drawTitle("Wireless enable");
+        Oled.setFont(OledFont::Value);
+        Oled.setCursor(8, 38);
+        Oled.print(WirelessAntenna.enabled() ? "ON" : "OFF");
+        Oled.setFont(OledFont::Small);
+        Oled.drawStr(0, 62, "click: toggle BLE");
+        Oled.sendBuffer();
+    }
+
+    void drawWirelessBleName()
+    {
+        Oled.clearBuffer();
+        drawTitle("BLE name");
+        Oled.setFont(OledFont::Text);
+        Oled.setCursor(0, 32);
+        Oled.print(WirelessAntenna.bleConfig().deviceName);
+        Oled.setFont(OledFont::Small);
+        Oled.drawStr(0, 52, "Use USB command to edit");
+        Oled.drawStr(0, 63, "wireless name DBx01");
+        Oled.sendBuffer();
+    }
+
     void drawChipInfo()
     {
         char temperatureText[12];
@@ -1317,7 +1407,11 @@ namespace
 
         if (!McuMonitor::ready() || isnan(McuMonitor::vddaVolts()))
         {
+#if defined(ARDUINO_ARCH_ESP32)
+            snprintf(vddaText, sizeof(vddaText), "N/A");
+#else
             snprintf(vddaText, sizeof(vddaText), "-.---V");
+#endif
         }
         else
         {
@@ -1396,13 +1490,12 @@ namespace
     void drawKeypadTimeout()
     {
         Oled.clearBuffer();
-        drawTitle("Keypad timeout");
+        drawTitle("Keypad link");
         Oled.setFont(OledFont::Value);
         Oled.setCursor(8, 38);
-        Oled.print(KEYPAD_UART_TIMEOUT_MS_DEFAULT);
-        Oled.print("ms");
+        Oled.print("NO UART");
         Oled.setFont(OledFont::Small);
-        Oled.drawStr(0, 62, "fixed UART timeout");
+        Oled.drawStr(0, 62, "protocol pending");
         Oled.sendBuffer();
     }
 
@@ -1416,7 +1509,11 @@ namespace
         Oled.setCursor(8, 38);
         Oled.print(KeypadPeripheral::eventPending() ? "HIGH" : "LOW");
         Oled.setFont(OledFont::Small);
-        Oled.drawStr(0, 62, keypad.eventInterruptEnabled ? "PA8 state, PB5 irq" : "interrupt disabled");
+#if defined(ARDUINO_ARCH_ESP32)
+        Oled.drawStr(0, 62, keypad.eventInterruptEnabled ? "event/state pins" : "interrupt disabled");
+#else
+        Oled.drawStr(0, 62, keypad.eventInterruptEnabled ? "PA8 state, PA9 irq" : "interrupt disabled");
+#endif
         Oled.sendBuffer();
     }
 
@@ -1461,7 +1558,11 @@ namespace
         Oled.setCursor(0, 24);
         Oled.print("Reset pulse sent");
         Oled.setCursor(0, 38);
-        Oled.print("PB4 -> KEY NRST");
+#if defined(ARDUINO_ARCH_ESP32)
+        Oled.print("KEYPAD reset NC");
+#else
+        Oled.print("PA10 -> KEY NRST");
+#endif
         Oled.setCursor(0, 52);
         Oled.print(elapsedText);
         Oled.setCursor(0, 62);
@@ -1598,7 +1699,11 @@ namespace
         Oled.print(DeskBus::ready(DeskBus::Device::AT24C32) ? "OK " : "-- ");
         Oled.print(DeskBus::addressText(DeskBus::Device::AT24C32));
         Oled.setCursor(0, 48);
+#if defined(ARDUINO_ARCH_ESP32)
+        Oled.print("Shared I2C GPIO35/36");
+#else
         Oled.print("Shared I2C PB9/PB8");
+#endif
         Oled.setCursor(0, 63);
         Oled.print("ESC: back");
         Oled.sendBuffer();
@@ -1831,6 +1936,10 @@ namespace
                     break;
                 case DisplayActiveEndOption:
                     formatMinutesOfDay(settings.displayActiveEndMinute, value, sizeof(value));
+                    Oled.drawStr(88, y, value);
+                    break;
+                case DisplayFrameRateOption:
+                    snprintf(value, sizeof(value), "%u", settings.displayFrameRateFps);
                     Oled.drawStr(88, y, value);
                     break;
                 default:
@@ -2073,11 +2182,23 @@ namespace
                 break;
             case Screen::SystemDisplayMenu:
             case Screen::SystemNotificationsMenu:
+                activeScreen = Screen::MainMenu;
+                break;
             case Screen::SystemPerifericsMenu:
             case Screen::BusMenu:
             case Screen::UsbInfo:
             case Screen::ChipInfo:
                 activeScreen = Screen::SystemMenu;
+                break;
+            case Screen::WirelessMenu:
+                activeScreen = Screen::MainMenu;
+                break;
+            case Screen::WirelessEnabled:
+            case Screen::WirelessBleName:
+            case Screen::WirelessPairing:
+            case Screen::WirelessState:
+            case Screen::WirelessApply:
+                activeScreen = Screen::WirelessMenu;
                 break;
             case Screen::LightEnabled:
             case Screen::LightMode:
@@ -2141,6 +2262,7 @@ namespace
             case Screen::DisplayActiveStart:
             case Screen::DisplayActiveEnd:
             case Screen::DisplayTimeout:
+            case Screen::DisplayFrameRate:
                 activeScreen = Screen::SystemDisplayMenu;
                 break;
             case Screen::KeypadMenu:
@@ -2182,11 +2304,50 @@ namespace
                     case MainButtons:
                         activeScreen = Screen::LightButtonsMenu;
                         break;
+                    case MainWireless:
+                        activeScreen = Screen::WirelessMenu;
+                        break;
+                    case MainDisplay:
+                        activeScreen = Screen::SystemDisplayMenu;
+                        break;
+                    case MainNotifications:
+                        activeScreen = Screen::SystemNotificationsMenu;
+                        break;
                     case MainSystem:
                         activeScreen = Screen::SystemMenu;
                         break;
                     default:
                         break;
+                }
+                break;
+            case Screen::WirelessMenu:
+                if (selectedWireless == WirelessBack)
+                {
+                    activeScreen = Screen::MainMenu;
+                }
+                else if (selectedWireless == WirelessEnabledOption)
+                {
+                    activeScreen = Screen::WirelessEnabled;
+                }
+                else if (selectedWireless == WirelessBleNameOption)
+                {
+                    activeScreen = Screen::WirelessBleName;
+                }
+                else if (selectedWireless == WirelessPairingOption)
+                {
+                    WirelessAntenna.setEnabled(true);
+                    WirelessAntenna.setMode(Antenna::Mode::BleDevice);
+                    WirelessAntenna.apply();
+                    activeScreen = Screen::WirelessPairing;
+                }
+                else if (selectedWireless == WirelessStateOption)
+                {
+                    activeScreen = Screen::WirelessState;
+                }
+                else
+                {
+                    WirelessAntenna.apply();
+                    activeScreen = Screen::WirelessApply;
                 }
                 break;
             case Screen::LightMenu:
@@ -2346,14 +2507,6 @@ namespace
                 {
                     activeScreen = Screen::MainMenu;
                 }
-                else if (selectedSystem == SystemDisplay)
-                {
-                    activeScreen = Screen::SystemDisplayMenu;
-                }
-                else if (selectedSystem == SystemNotifications)
-                {
-                    activeScreen = Screen::SystemNotificationsMenu;
-                }
                 else if (selectedSystem == SystemPeriferics)
                 {
                     activeScreen = Screen::SystemPerifericsMenu;
@@ -2396,9 +2549,13 @@ namespace
                 {
                     activeScreen = Screen::DisplayActiveStart;
                 }
-                else
+                else if (selectedDisplay == DisplayActiveEndOption)
                 {
                     activeScreen = Screen::DisplayActiveEnd;
+                }
+                else
+                {
+                    activeScreen = Screen::DisplayFrameRate;
                 }
                 break;
             case Screen::SystemPerifericsMenu:
@@ -2502,6 +2659,17 @@ namespace
                 StripLight::toggleEnabled();
                 markStripConfigChanged();
                 break;
+            case Screen::WirelessEnabled:
+                WirelessAntenna.setEnabled(!WirelessAntenna.enabled());
+                WirelessAntenna.setMode(WirelessAntenna.enabled() ? Antenna::Mode::BleDevice : Antenna::Mode::Off);
+                WirelessAntenna.apply();
+                break;
+            case Screen::WirelessPairing:
+            case Screen::WirelessApply:
+                WirelessAntenna.setEnabled(true);
+                WirelessAntenna.setMode(Antenna::Mode::BleDevice);
+                WirelessAntenna.apply();
+                break;
             case Screen::LightMode:
                 StripLight::toggleMode();
                 markStripConfigChanged();
@@ -2542,6 +2710,9 @@ namespace
                 break;
             case Screen::MainMenu:
                 moveSelection(selectedMain, MainOptionCount, delta);
+                break;
+            case Screen::WirelessMenu:
+                moveSelection(selectedWireless, WirelessOptionCount, delta);
                 break;
             case Screen::LightMenu:
                 moveSelection(selectedLight, LightOptionCount, delta);
@@ -2659,6 +2830,10 @@ namespace
                 DeskSettings::data().displayTimeoutMs = adjustedValue(DeskSettings::data().displayTimeoutMs, delta, DISPLAY_TIMEOUT_MS_STEP_DEFAULT, DISPLAY_TIMEOUT_MS_MIN_DEFAULT, DISPLAY_TIMEOUT_MS_MAX_DEFAULT);
                 DeskSettings::markDirty();
                 break;
+            case Screen::DisplayFrameRate:
+                DeskSettings::data().displayFrameRateFps = adjustedValue(DeskSettings::data().displayFrameRateFps, delta, DISPLAY_FRAME_RATE_FPS_STEP_DEFAULT, DISPLAY_FRAME_RATE_FPS_MIN_DEFAULT, DISPLAY_FRAME_RATE_FPS_MAX_DEFAULT);
+                DeskSettings::markDirty();
+                break;
             case Screen::DisplayDesign:
             {
                 int16_t design = static_cast<int16_t>(DeskSettings::data().displayDesign) + (delta > 0 ? 1 : -1);
@@ -2725,6 +2900,24 @@ namespace
                 break;
             case Screen::MainMenu:
                 drawOptionList("Menu", mainOptions, MainOptionCount, selectedMain);
+                break;
+            case Screen::WirelessMenu:
+                drawOptionList("Wireless", wirelessOptions, WirelessOptionCount, selectedWireless);
+                break;
+            case Screen::WirelessEnabled:
+                drawWirelessEnabled();
+                break;
+            case Screen::WirelessBleName:
+                drawWirelessBleName();
+                break;
+            case Screen::WirelessPairing:
+                drawWirelessState("BLE pairing");
+                break;
+            case Screen::WirelessState:
+                drawWirelessState("Wireless");
+                break;
+            case Screen::WirelessApply:
+                drawWirelessState("Wireless apply");
                 break;
             case Screen::UsbInfo:
                 drawUsbInfo();
@@ -2879,6 +3072,9 @@ namespace
             case Screen::DisplayTimeout:
                 drawRawEdit("Display timeout", DeskSettings::data().displayTimeoutMs / 1000, "seconds");
                 break;
+            case Screen::DisplayFrameRate:
+                drawRawEdit("Frame FPS", DeskSettings::data().displayFrameRateFps, "range 15..50");
+                break;
             case Screen::DisplayDesign:
                 drawDisplayDesign();
                 break;
@@ -2981,7 +3177,11 @@ namespace OledPanel
         }
 
         const uint32_t redrawIntervalMs = periodicRedrawInterval();
-        if (needsRedraw || (redrawIntervalMs > 0 && now - lastDrawMs >= redrawIntervalMs))
+        const uint8_t frameRateFps = constrain(DeskSettings::dataConst().displayFrameRateFps, DISPLAY_FRAME_RATE_FPS_MIN_DEFAULT, DISPLAY_FRAME_RATE_FPS_MAX_DEFAULT);
+        const uint32_t frameIntervalMs = 1000UL / (frameRateFps == 0 ? 1 : frameRateFps);
+        const bool frameDue = lastDrawMs == 0 || now - lastDrawMs >= frameIntervalMs;
+        const bool periodicDue = redrawIntervalMs > 0 && now - lastDrawMs >= redrawIntervalMs;
+        if (frameDue && (needsRedraw || periodicDue))
         {
             lastDrawMs = now;
             needsRedraw = false;

@@ -10,6 +10,8 @@ class HardwareTask
 {
 public:
     void begin();
+    void updateBackend();
+    void updateInterface();
     void update();
 
     uint32_t cycles() const
@@ -30,11 +32,14 @@ public:
 private:
     void logFirmwareIdentity();
     void logHeartbeat();
+    void updateUsbNotifications();
 
     uint32_t cycles_ = 0;
     uint32_t lastLoopMicros_ = 0;
     uint32_t maxLoopMicros_ = 0;
     uint32_t loopStartUs_ = 0;
     bool identityLogged_ = false;
+    bool keypadPresenceKnown_ = false;
+    bool lastKeypadPresent_ = false;
     Crono heartbeat_{HARDWARE_TASK_HEARTBEAT_MS_DEFAULT};
 };

@@ -2,25 +2,33 @@
 
 #include <Arduino.h>
 
-namespace PeripheralPins
-{
-    constexpr uint32_t UART_RX = PA10;
-    constexpr uint32_t UART_TX = PA9;
+namespace KeypadConfig {
 
-    constexpr uint8_t PWM_COLD = PB5;
-    constexpr uint8_t PWM_WARM = PB4;
+constexpr uint8_t BUTTON_COUNT = 5;
 
-    constexpr uint8_t BUTTON_0 = PB12;
-    constexpr uint8_t BUTTON_1 = PB13;
-    constexpr uint8_t BUTTON_2 = PB14;
-    constexpr uint8_t BUTTON_3 = PB15;
-    constexpr uint8_t BUTTON_4 = PA8;
+constexpr uint32_t UART_RX_PIN = PA2;
+constexpr uint32_t UART_TX_PIN = PA3;
 
-    constexpr uint8_t BUTTON_POWER = BUTTON_0;
-    constexpr uint8_t BUTTON_ADJUST = BUTTON_1;
+constexpr uint32_t EVENT_PIN = PA1;
+constexpr uint32_t STATE_PIN = PB0;
 
-    constexpr uint8_t EVENT_OUT = PC13;
-    constexpr uint8_t STATE_OUT = PC14;
-    constexpr uint8_t CURRENT_SENSOR = PA6;
-    constexpr uint8_t VOLTAGE_SENSOR = PA7;
-}
+constexpr uint32_t BUTTON_PINS[BUTTON_COUNT] = {
+  PB3,
+  PA12,
+  PA11,
+  PA7,
+  PA6,
+};
+
+constexpr bool BUTTON_ACTIVE_LOW = false;
+constexpr bool BUTTON_PULLUP = false;
+
+constexpr unsigned long DEBOUNCE_MS = 40;
+constexpr unsigned long CLICK_MS = 250;
+constexpr unsigned long LONG_PRESS_MS = 700;
+constexpr unsigned long TICK_INTERVAL_MS = 1;
+
+constexpr unsigned long CORE_UART_BAUD = 115200;
+constexpr uint8_t UART_LINE_CAPACITY = 48;
+
+}  // namespace KeypadConfig

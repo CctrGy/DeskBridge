@@ -69,6 +69,7 @@ namespace
         settings.displayActiveStartMinute = DISPLAY_ACTIVE_START_MINUTE_DEFAULT;
         settings.displayActiveEndMinute = DISPLAY_ACTIVE_END_MINUTE_DEFAULT;
         settings.displayDesign = DISPLAY_HOME_DESIGN_DEFAULT;
+        settings.displayFrameRateFps = DISPLAY_FRAME_RATE_FPS_DEFAULT;
         settings.sensorSampleIntervalMs = SENSOR_SAMPLE_INTERVAL_MS_DEFAULT;
         settings.sensorSampleCount = SENSOR_SAMPLE_COUNT_DEFAULT;
         settings.temperatureUnit = TEMPERATURE_UNIT_DEFAULT;
@@ -129,6 +130,7 @@ namespace
         {
             settings.displayDesign = DISPLAY_HOME_DESIGN_DEFAULT;
         }
+        settings.displayFrameRateFps = constrain(settings.displayFrameRateFps, DISPLAY_FRAME_RATE_FPS_MIN_DEFAULT, DISPLAY_FRAME_RATE_FPS_MAX_DEFAULT);
         settings.sensorSampleIntervalMs = constrain(settings.sensorSampleIntervalMs, SENSOR_SAMPLE_INTERVAL_MS_MIN_DEFAULT, SENSOR_SAMPLE_INTERVAL_MS_MAX_DEFAULT);
         settings.sensorSampleCount = constrain(settings.sensorSampleCount, SENSOR_SAMPLE_COUNT_MIN_DEFAULT, SENSOR_SAMPLE_COUNT_MAX_DEFAULT);
         settings.temperatureUnit = settings.temperatureUnit > 1 ? 0 : settings.temperatureUnit;

@@ -17,7 +17,13 @@ def format_result(result: CommandResult, *, debug: bool = False) -> str:
         sections.append(f"{theme.debug_marker('<< data')}\n{theme.value(result.data)}")
 
     if not result.ok:
-        sections.append(f"{theme.error('ERROR')}: {result.error or 'comando fallido'}")
+        error_text = result.error or "comando fallido"
+        errors = (result.diagnostics or {}).get("errors") if result.diagnostics else None
+        if errors and isinstance(errors, list) and errors:
+            first = errors[0]
+            if isinstance(first, dict) and first.get("code"):
+                error_text = f"{first['code']} {error_text}"
+        sections.append(f"{theme.error('ERROR')}: {error_text}")
         return "\n\n".join(sections)
 
     if result.command_name.startswith("rtc."):

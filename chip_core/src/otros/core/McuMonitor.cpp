@@ -4,6 +4,116 @@
 #include <math.h>
 
 #include "config/DeskConfig.h"
+
+#if defined(ARDUINO_ARCH_ESP32)
+
+#include <esp_system.h>
+
+namespace
+{
+    constexpr uint32_t monitorIntervalMs = MCU_MONITOR_INTERVAL_MS_DEFAULT;
+
+    bool initialized = false;
+    float chipTemperatureC = NAN;
+    float chipVddaVolts = NAN;
+    uint32_t lastReadMs = 0;
+    const char *resetReasonText = "unknown";
+    char uniqueIdText[25] = {};
+
+    void captureUniqueId()
+    {
+        const uint64_t mac = ESP.getEfuseMac();
+        snprintf(uniqueIdText, sizeof(uniqueIdText), "%016llX", static_cast<unsigned long long>(mac));
+    }
+
+    void captureResetReason()
+    {
+        switch (esp_reset_reason())
+        {
+            case ESP_RST_POWERON: resetReasonText = "power"; break;
+            case ESP_RST_SW: resetReasonText = "software"; break;
+            case ESP_RST_PANIC: resetReasonText = "panic"; break;
+            case ESP_RST_INT_WDT:
+            case ESP_RST_TASK_WDT:
+            case ESP_RST_WDT: resetReasonText = "watchdog"; break;
+            case ESP_RST_DEEPSLEEP: resetReasonText = "deep sleep"; break;
+            case ESP_RST_BROWNOUT: resetReasonText = "brownout"; break;
+            default: resetReasonText = "unknown"; break;
+        }
+    }
+}
+
+namespace McuMonitor
+{
+    void begin()
+    {
+        captureUniqueId();
+        captureResetReason();
+        initialized = true;
+        update();
+    }
+
+    void update()
+    {
+        if (!initialized)
+        {
+            return;
+        }
+
+        const uint32_t now = millis();
+        if (lastReadMs != 0 && now - lastReadMs < monitorIntervalMs)
+        {
+            return;
+        }
+
+        lastReadMs = now;
+        chipTemperatureC = temperatureRead();
+        chipVddaVolts = NAN;
+    }
+
+    bool ready()
+    {
+        return true;
+    }
+
+    float temperatureC()
+    {
+        return chipTemperatureC;
+    }
+
+    float vddaVolts()
+    {
+        return chipVddaVolts;
+    }
+
+    uint32_t coreClockHz()
+    {
+        return static_cast<uint32_t>(ESP.getCpuFreqMHz()) * 1000000UL;
+    }
+
+    uint32_t uptimeSeconds()
+    {
+        return millis() / 1000;
+    }
+
+    const char *chipName()
+    {
+        return "ESP32-S3";
+    }
+
+    const char *uniqueIdHex()
+    {
+        return uniqueIdText;
+    }
+
+    const char *resetReason()
+    {
+        return resetReasonText;
+    }
+}
+
+#else
+
 #include "stm32f4xx_hal.h"
 
 namespace
@@ -21,6 +131,7 @@ namespace
     float chipVddaVolts = NAN;
     uint32_t lastReadMs = 0;
     const char *resetReasonText = "unknown";
+    char uniqueIdText[25] = {};
 
     uint16_t readAdcChannel(uint32_t channel)
     {
@@ -125,12 +236,21 @@ namespace
         const float tempVoltage = (static_cast<float>(tempRaw) * chipVddaVolts) / adcMax;
         chipTemperatureC = ((tempVoltage - tempV25) / tempAverageSlope) + 25.0f;
     }
+
+    void captureUniqueId()
+    {
+        snprintf(uniqueIdText, sizeof(uniqueIdText), "%08lX%08lX%08lX",
+                 static_cast<unsigned long>(HAL_GetUIDw0()),
+                 static_cast<unsigned long>(HAL_GetUIDw1()),
+                 static_cast<unsigned long>(HAL_GetUIDw2()));
+    }
 }
 
 namespace McuMonitor
 {
     void begin()
     {
+        captureUniqueId();
         captureResetReason();
         initAdc();
         initialized = true;
@@ -190,8 +310,15 @@ namespace McuMonitor
 #endif
     }
 
+    const char *uniqueIdHex()
+    {
+        return uniqueIdText;
+    }
+
     const char *resetReason()
     {
         return resetReasonText;
     }
 }
+
+#endif

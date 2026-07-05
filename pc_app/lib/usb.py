@@ -13,6 +13,8 @@ from struct import Struct
 from time import monotonic
 from typing import Callable, Iterable
 
+from sdk.identity import LEGACY_FRAME_PROTOCOL, USB_PID, USB_VID
+
 try:
     import serial
     from serial.tools import list_ports
@@ -73,11 +75,11 @@ class DeskBridgeUSB:
     bytes are only a stream synchronization marker and are not part of the CRC.
     """
 
-    VID = 0x1209
-    PID = 0xDB01
+    VID = USB_VID
+    PID = USB_PID
 
     MAGIC = b"\xDB\x01"
-    VERSION = 0x01
+    VERSION = LEGACY_FRAME_PROTOCOL
     MAX_PAYLOAD = 4096
 
     _HEADER = Struct("<2sBBBH")

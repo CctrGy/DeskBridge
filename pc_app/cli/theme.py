@@ -11,6 +11,9 @@ import re
 import json
 from pathlib import Path
 
+from sdk.config_file import AppConfig
+from sdk.paths import data_dir
+
 try:
     from colorama import Back, Fore, Style, just_fix_windows_console
 except ImportError:  # pragma: no cover - exercised only before dependencies install.
@@ -49,17 +52,31 @@ except ImportError:  # pragma: no cover - exercised only before dependencies ins
         return None
 
 
-_COLOR_ENABLED = os.environ.get("NO_COLOR") is None
-if _COLOR_ENABLED:
-    just_fix_windows_console()
+PC_APP_DIR = data_dir().parent
+PALETTE_FILE = PC_APP_DIR / "data" / "settings" / "terminal_palette.json"
+LEGACY_PALETTE_FILE = PC_APP_DIR / "data" / "settings" / "terminal_palete.json"
+PALETTE_DIR = PC_APP_DIR / "data" / "settings" / "palete"
+PALETTE_CONFIG = PALETTE_DIR / "palete.config"
+PALETTE_DARK_FILE = PALETTE_DIR / "dark.json"
+PALETTE_LIGHT_FILE = PALETTE_DIR / "light.json"
+LEGACY_PALETTE_DARCK_FILE = PC_APP_DIR / "data" / "settings" / "terminal_paleteDarck.json"
+LEGACY_PALETTE_LIGHT_FILE = PC_APP_DIR / "data" / "settings" / "terminal_paleteLight.json"
+_COLOR_ENABLED = False
+_AVAILABLE_PALETTES: dict[str, str] = {}
+_CONSOLE_BACKGROUND_APPLIED = False
 
-PC_APP_DIR = Path(__file__).resolve().parents[1]
-PALETTE_FILE = PC_APP_DIR / "data" / "settings" / "terminal_palete.json"
+
+def _load_color_enabled() -> bool:
+    if os.environ.get("NO_COLOR") is not None:
+        return False
+    return AppConfig.load().terminal_color
 
 
 def _load_palette() -> dict[str, str]:
     try:
-        data = json.loads(PALETTE_FILE.read_text(encoding="utf-8"))
+        config = AppConfig.load()
+        path = _palette_path(config.terminal_palette)
+        data = json.loads(path.read_text(encoding="utf-8"))
         selected = str(data.get("selected", "default"))
         palettes = data.get("palettes", {})
         palette = palettes.get(selected, palettes.get("default", {}))
@@ -68,7 +85,87 @@ def _load_palette() -> dict[str, str]:
         return {}
 
 
-_PALETTE = _load_palette()
+def _palette_path(name: str) -> Path:
+    palettes = load_available_palettes()
+    normalized = normalize_palette_name(name)
+    file_name = palettes.get(normalized)
+    if file_name:
+        return PALETTE_DIR / file_name
+    if normalized == "dark" and LEGACY_PALETTE_DARCK_FILE.exists():
+        return LEGACY_PALETTE_DARCK_FILE
+    if normalized == "light" and PALETTE_LIGHT_FILE.exists():
+        return PALETTE_LIGHT_FILE
+    if normalized == "light" and LEGACY_PALETTE_LIGHT_FILE.exists():
+        return LEGACY_PALETTE_LIGHT_FILE
+    if PALETTE_FILE.exists():
+        return PALETTE_FILE
+    return LEGACY_PALETTE_FILE
+
+
+def normalize_palette_name(name: str) -> str:
+    normalized = str(name or "").strip().lower()
+    return "dark" if normalized == "darck" else normalized
+
+
+def ensure_default_palette_files() -> None:
+    PALETTE_DIR.mkdir(parents=True, exist_ok=True)
+    if not PALETTE_CONFIG.exists():
+        PALETTE_CONFIG.write_text("selected: dark\ndark: dark.json\nlight: light.json\n", encoding="utf-8")
+    if not PALETTE_DARK_FILE.exists() and LEGACY_PALETTE_DARCK_FILE.exists():
+        PALETTE_DARK_FILE.write_text(LEGACY_PALETTE_DARCK_FILE.read_text(encoding="utf-8"), encoding="utf-8")
+    if not PALETTE_LIGHT_FILE.exists() and LEGACY_PALETTE_LIGHT_FILE.exists():
+        PALETTE_LIGHT_FILE.write_text(LEGACY_PALETTE_LIGHT_FILE.read_text(encoding="utf-8"), encoding="utf-8")
+
+
+def load_available_palettes() -> dict[str, str]:
+    ensure_default_palette_files()
+    values: dict[str, str] = {}
+    if PALETTE_CONFIG.exists():
+        for line in PALETTE_CONFIG.read_text(encoding="utf-8").splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#") or ":" not in stripped:
+                continue
+            key, value = stripped.split(":", 1)
+            key = normalize_palette_name(key)
+            value = value.strip()
+            if key == "selected":
+                continue
+            values[key] = value
+    for path in sorted(PALETTE_DIR.glob("*.json")):
+        values.setdefault(normalize_palette_name(path.stem), path.name)
+    return values
+
+
+def palette_names() -> list[str]:
+    return sorted(_AVAILABLE_PALETTES or load_available_palettes())
+
+
+def palette_value(name: str, default: str = "") -> str:
+    return str(_PALETTE.get(name, default))
+
+
+def reload() -> None:
+    global _COLOR_ENABLED, _PALETTE, _AVAILABLE_PALETTES
+    _COLOR_ENABLED = _load_color_enabled()
+    if _COLOR_ENABLED:
+        just_fix_windows_console()
+    _AVAILABLE_PALETTES = load_available_palettes()
+    _PALETTE = _load_palette()
+    apply_console_background()
+
+
+def set_color_enabled(enabled: bool) -> None:
+    AppConfig.load().set_terminal_color(enabled)
+    reload()
+
+
+def set_palette(name: str) -> None:
+    normalized = normalize_palette_name(name)
+    palettes = load_available_palettes()
+    if normalized not in palettes:
+        raise ValueError(f"Unknown palete: {name}")
+    AppConfig.load().set_terminal_palette(normalized)
+    reload()
 
 
 _COLOR_CODES = {
@@ -88,7 +185,73 @@ _COLOR_CODES = {
     "magenta_bright": Style.BRIGHT + Fore.MAGENTA,
     "cyan_bright": Style.BRIGHT + Fore.CYAN,
     "white_bright": Style.BRIGHT + Fore.WHITE,
+    "background_black": Back.BLACK,
+    "background_red": Back.RED,
+    "background_green": Back.GREEN,
+    "background_yellow": Back.YELLOW,
+    "background_blue": Back.BLUE,
+    "background_magenta": Back.MAGENTA,
+    "background_cyan": Back.CYAN,
+    "background_white": Back.WHITE,
 }
+
+
+_CMD_COLOR_CODES = {
+    "black": "0",
+    "blue": "1",
+    "green": "2",
+    "cyan": "3",
+    "red": "4",
+    "magenta": "5",
+    "yellow": "6",
+    "white": "7",
+    "gray": "8",
+    "blue_bright": "9",
+    "green_bright": "A",
+    "cyan_bright": "B",
+    "red_bright": "C",
+    "magenta_bright": "D",
+    "yellow_bright": "E",
+    "white_bright": "F",
+    "cmd_0": "0",
+    "cmd_1": "1",
+    "cmd_2": "2",
+    "cmd_3": "3",
+    "cmd_4": "4",
+    "cmd_5": "5",
+    "cmd_6": "6",
+    "cmd_7": "7",
+    "cmd_8": "8",
+    "cmd_9": "9",
+    "cmd_a": "A",
+    "cmd_b": "B",
+    "cmd_c": "C",
+    "cmd_d": "D",
+    "cmd_e": "E",
+    "cmd_f": "F",
+}
+
+
+def apply_console_background() -> None:
+    global _CONSOLE_BACKGROUND_APPLIED
+    if not _COLOR_ENABLED or os.name != "nt":
+        return
+
+    background = str(_PALETTE.get("background") or "").lower()
+    if not background:
+        return
+
+    background_code = _CMD_COLOR_CODES.get(background)
+    foreground_code = _CMD_COLOR_CODES.get(str(_PALETTE.get("foreground") or "white").lower(), "7")
+    if not background_code:
+        return
+
+    os.system(f"color {background_code}{foreground_code}")
+    _CONSOLE_BACKGROUND_APPLIED = True
+
+
+_PALETTE = _load_palette()
+reload()
 
 
 def color(text: object, *codes: str) -> str:

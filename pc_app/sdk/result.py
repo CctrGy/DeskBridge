@@ -13,5 +13,7 @@ class CommandResult:
     raw_command: str
     raw_response: str | None = None
     data: dict[str, Any] | None = None
+    diagnostics: dict[str, Any] | None = None
+    messages: list[Any] | None = None
     message: str | None = None
     error: str | None = None

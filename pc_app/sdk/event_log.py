@@ -49,6 +49,7 @@ class DeskBridgeLogManager:
         self.pc_logger = LoggerAdapter(logging.getLogger("deskbridge.pc"), {"source": "PC"})
         self.user_logger = LoggerAdapter(logging.getLogger("deskbridge.user"), {"source": "USER"})
         self.peripheral_logger = LoggerAdapter(logging.getLogger("deskbridge.peripheral"), {"source": "PERIPHERAL"})
+        self.origin = ""
         self.set_level(self.config.log_level, persist=False)
         self.pc("INFO", "DeskBridge PC app started | log=%s", self.relative_log_file)
 
@@ -78,6 +79,14 @@ class DeskBridgeLogManager:
             self.config.set_log_level(normalized)
         self.pc_logger.info("log level set to %s", normalized)
         return normalized
+
+    def set_origin(self, origin: str) -> None:
+        normalized = origin.strip().upper()
+        self.origin = normalized
+        prefix = f"{normalized}:" if normalized else ""
+        self.pc_logger.extra["source"] = f"{prefix}PC"
+        self.user_logger.extra["source"] = f"{prefix}USER"
+        self.peripheral_logger.extra["source"] = f"{prefix}PERIPHERAL"
 
     def pc(self, level: str, message: str, *args: object) -> None:
         self._write(self.pc_logger, level, message, *args)

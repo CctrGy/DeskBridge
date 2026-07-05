@@ -6,18 +6,18 @@ namespace DeskBridgeVersion
 {
     // Firmware semantic version. Update these three values for firmware releases.
     inline constexpr uint8_t MAJOR = 0;
-    inline constexpr uint8_t MINOR = 3;
+    inline constexpr uint8_t MINOR = 4;
     inline constexpr uint8_t PATCH = 0;
 
-    inline constexpr char FIRMWARE[] = "0.3.0";
+    inline constexpr char FIRMWARE[] = "0.4.0";
     inline constexpr char DEVICE_NAME[] = "DeskBridge chip_core";
 
     // Protocol version used by the PC app wire framing.
-    inline constexpr uint8_t SERIAL_PROTOCOL = 0x03;
+    inline constexpr uint8_t SERIAL_PROTOCOL = 0x04;
 
     // USB bcdDevice revision shown by the host as the device release number.
     // It is separate from semantic versioning because USB stores BCD digits.
-    inline constexpr uint16_t USB_DEVICE_BCD = 0x0300;
+    inline constexpr uint16_t USB_DEVICE_BCD = 0x0400;
 
     struct Info
     {

@@ -8,11 +8,19 @@
 
 namespace BoardI2C
 {
+#if defined(ARDUINO_ARCH_ESP32)
+    TwoWire sharedBus(0);
+#else
     TwoWire sharedBus(I2C_SYSTEM_SDA_PIN, I2C_SYSTEM_SCL_PIN);
+#endif
 
     void begin()
     {
+#if defined(ARDUINO_ARCH_ESP32)
+        sharedBus.begin(I2C_SYSTEM_SDA_PIN, I2C_SYSTEM_SCL_PIN);
+#else
         sharedBus.begin();
+#endif
         sharedBus.setClock(I2C_CLOCK_HZ_DEFAULT);
     }
 

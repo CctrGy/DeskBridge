@@ -1,5 +1,8 @@
 #include "OledDisplay.hpp"
 
+#include <SPI.h>
+
+#include "config/DeskConfig.h"
 #include "config/pins_config.h"
 
 OledDisplay Oled;
@@ -11,7 +14,13 @@ OledDisplay::OledDisplay()
 
 void OledDisplay::begin()
 {
+#if defined(ARDUINO_ARCH_ESP32)
+    SPI.begin(OLED_CLK_PIN, OLED_MISO_PIN, OLED_MOSI_PIN, OLED_CS_PIN);
+#endif
     display_.begin();
+#if defined(ARDUINO_ARCH_ESP32)
+    display_.setBusClock(OLED_SPI_CLOCK_HZ_DEFAULT);
+#endif
 }
 
 void OledDisplay::setPowerSave(bool enabled)

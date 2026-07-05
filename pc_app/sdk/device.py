@@ -8,12 +8,14 @@ from sdk.event_log import DeskBridgeLogManager
 from sdk.exceptions import DeskBridgeError, DeviceCommandError, DeviceTimeoutError
 from sdk.modules.bus import BusModule
 from sdk.modules.core import CoreModule
+from sdk.modules.display import DisplayModule
 from sdk.modules.keypad import KeypadModule
 from sdk.modules.light import LightModule
 from sdk.modules.reset import ResetModule
 from sdk.modules.rtc import RtcModule
 from sdk.modules.system import SystemModule
-from sdk.protocol import ErrorMessage, LogMessage, Message, MessageKind, ProtocolParser, ValueMessage
+from sdk.modules.wireless import WirelessModule
+from sdk.protocol import ErrorMessage, EventMessage, LogMessage, MarkerMessage, Message, MessageKind, ProtocolHeader, ProtocolParser, TuiNotificationMessage, ValueMessage, ensure_header
 from sdk.result import CommandResult
 from sdk.transport import SerialTransport
 
@@ -39,15 +41,17 @@ class DeviceSDK:
         self.parser = parser or ProtocolParser()
         self.response_timeout = response_timeout
         self.firmware_logger = firmware_logger or self.log_manager.peripheral_logger
-        self.command_channel = "SHL"
+        self.command_channel = ProtocolHeader.SHELL
 
         self.core = CoreModule(self)
+        self.display = DisplayModule(self)
         self.bus = BusModule(self)
         self.keypad = KeypadModule(self)
         self.light = LightModule(self)
         self.reset = ResetModule(self)
         self.rtc = RtcModule(self)
         self.system = SystemModule(self)
+        self.wireless = WirelessModule(self)
 
         # Common aliases for application code that prefers semantic names.
         self.program = self.core
@@ -89,13 +93,20 @@ class DeviceSDK:
         line: str,
         *,
         timeout: float | None = None,
+        raise_on_error: bool = True,
     ) -> tuple[list[Message], str]:
-        self.transport.write_line(f"[{self.command_channel}] {line}")
+        outbound_line = self.prepare_command_line(line)
+        self.transport.write_line(outbound_line)
         messages, raw_response = self.read_until_prompt(timeout=timeout)
         errors = [message for message in messages if isinstance(message, ErrorMessage)]
-        if errors:
-            raise DeviceCommandError(errors[0].detail or errors[0].raw)
+        if errors and raise_on_error:
+            raise DeviceCommandError(errors[0].detail, code=errors[0].code, raw=errors[0].raw)
         return [message for message in messages if message.kind is not MessageKind.PROMPT], raw_response
+
+    def prepare_command_line(self, line: str) -> str:
+        """Return a serial line with the shell header required by protocol v3."""
+
+        return ensure_header(line, self.command_channel)
 
     def command_result(
         self,
@@ -104,25 +115,44 @@ class DeviceSDK:
         *,
         timeout: float | None = None,
     ) -> CommandResult:
-        self.log_manager.pc("DEBUG", "command send: %s", raw_command)
+        outbound_command = self.prepare_command_line(raw_command)
+        self.log_manager.pc("DEBUG", "command send: %s", outbound_command)
         try:
-            messages, raw_response = self.command_messages(raw_command, timeout=timeout)
+            messages, raw_response = self.command_messages(raw_command, timeout=timeout, raise_on_error=False)
         except DeskBridgeError as exc:
-            self.log_manager.pc("ERROR", "command failed: %s | %s", raw_command, exc)
+            self.log_manager.pc("ERROR", "command failed: %s | %s", outbound_command, exc)
             return CommandResult(
                 ok=False,
                 command_name=command_name,
-                raw_command=raw_command,
+                raw_command=outbound_command,
                 error=str(exc),
             )
 
-        self.log_manager.pc("DEBUG", "command ok: %s", raw_command)
+        diagnostics = diagnostics_by_kind(messages)
+        errors = diagnostics.get("errors") or []
+        if errors:
+            error_text = errors[0]["detail"] if isinstance(errors[0], dict) else str(errors[0])
+            self.log_manager.pc("ERROR", "command failed: %s | %s", outbound_command, error_text)
+            return CommandResult(
+                ok=False,
+                command_name=command_name,
+                raw_command=outbound_command,
+                raw_response=raw_response,
+                data=values_by_key(messages),
+                diagnostics=diagnostics,
+                messages=messages,
+                error=error_text,
+            )
+
+        self.log_manager.pc("DEBUG", "command ok: %s", outbound_command)
         return CommandResult(
             ok=True,
             command_name=command_name,
-            raw_command=raw_command,
+            raw_command=outbound_command,
             raw_response=raw_response,
             data=values_by_key(messages),
+            diagnostics=diagnostics,
+            messages=messages,
             message=message_text(messages),
         )
 
@@ -191,6 +221,46 @@ def values_by_key(messages: list[Message]) -> dict[str, object]:
             else:
                 values[message.key] = message.value
     return values
+
+
+def diagnostics_by_kind(messages: list[Message]) -> dict[str, object]:
+    diagnostics: dict[str, object] = {}
+    errors: list[dict[str, str]] = []
+    logs: list[str] = []
+    events: list[dict[str, object]] = []
+    markers: list[dict[str, str]] = []
+    notifications: list[dict[str, str]] = []
+
+    for message in messages:
+        if isinstance(message, ErrorMessage):
+            errors.append({"code": message.code, "detail": message.detail, "raw": message.raw})
+        elif isinstance(message, LogMessage):
+            logs.append(message.text)
+        elif isinstance(message, EventMessage):
+            events.append({"name": message.name, "args": list(message.args), "raw": message.raw})
+        elif isinstance(message, MarkerMessage):
+            markers.append({"code": message.code, "text": message.text, "raw": message.raw})
+        elif isinstance(message, TuiNotificationMessage):
+            notifications.append(
+                {
+                    "code": message.code,
+                    "summary": message.summary,
+                    "detail": message.detail,
+                    "raw": message.raw,
+                }
+            )
+
+    if errors:
+        diagnostics["errors"] = errors
+    if logs:
+        diagnostics["logs"] = logs
+    if events:
+        diagnostics["events"] = events
+    if markers:
+        diagnostics["markers"] = markers
+    if notifications:
+        diagnostics["notifications"] = notifications
+    return diagnostics
 
 
 def message_text(messages: list[Message]) -> str | None:

@@ -1,0 +1,41 @@
+{
+  "expo": {
+    "name": "DeskBridge",
+    "slug": "deskbridge-mobile",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "plugins": [
+      [
+        "react-native-ble-plx",
+        {
+          "isBackgroundEnabled": true,
+          "modes": [
+            "central"
+          ],
+          "bluetoothAlwaysPermission": "DeskBridge uses Bluetooth to connect to the nearby DeskBridge core."
+        }
+      ]
+    ],
+    "android": {
+      "package": "com.deskbridge.mobile",
+      "permissions": [
+        "android.permission.BLUETOOTH",
+        "android.permission.BLUETOOTH_ADMIN",
+        "android.permission.BLUETOOTH_SCAN",
+        "android.permission.BLUETOOTH_CONNECT",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ]
+    },
+    "ios": {
+      "bundleIdentifier": "com.deskbridge.mobile",
+      "infoPlist": {
+        "NSBluetoothAlwaysUsageDescription": "DeskBridge uses Bluetooth to connect to the nearby DeskBridge core.",
+        "NSBluetoothPeripheralUsageDescription": "DeskBridge uses Bluetooth to connect to the nearby DeskBridge core."
+      }
+    }
+  }
+}

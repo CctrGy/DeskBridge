@@ -33,6 +33,7 @@ namespace DeskSettings
         uint16_t displayActiveStartMinute;
         uint16_t displayActiveEndMinute;
         uint8_t displayDesign;
+        uint8_t displayFrameRateFps;
 
         uint32_t sensorSampleIntervalMs;
         uint8_t sensorSampleCount;

@@ -1,0 +1,332 @@
+DeskBridge Wireless BLE Protocol
+================================
+
+Firmware target: CHIP_CORE ESP32-S3
+Firmware version: 0.4.0
+Protocol version: 0x04
+Document purpose: BLE communication reference for the mobile app.
+
+
+1. Scope
+--------
+
+This file documents the BLE protocol used between a phone and the DeskBridge
+CHIP_CORE.
+
+The ESP32-S3 works as a BLE peripheral/server.
+The phone works as a BLE central/client.
+
+The firmware advertises itself through BLE. Automatic connection when the phone
+is nearby must be handled by the mobile app or by the phone OS. The ESP32 cannot
+force a phone to connect by proximity; it can only advertise and accept the
+connection.
+
+
+2. BLE Identity
+---------------
+
+Default BLE device name:
+
+DBx01
+
+BLE autostart:
+
+enabled
+
+Default telemetry interval:
+
+2000 ms
+
+Default info interval:
+
+10000 ms
+
+
+3. GATT Layout
+--------------
+
+Service UUID:
+
+8f7f0001-6b21-4f5e-9c7e-123456780001
+
+Characteristic UUID:
+
+8f7f0002-6b21-4f5e-9c7e-123456780001
+
+Characteristic properties:
+
+READ
+WRITE
+NOTIFY
+
+Initial READ value:
+
+DeskBridge
+
+The current protocol uses one characteristic for both directions:
+
+Phone -> CHIP_CORE: write plain text commands.
+CHIP_CORE -> Phone: notify plain text status/data/error lines.
+
+
+4. Connection Lifecycle
+-----------------------
+
+Normal startup:
+
+1. Firmware initializes BLE if wireless BLE autostart is enabled.
+2. Device advertises as DBx01.
+3. Phone scans by Service UUID.
+4. Phone connects.
+5. Phone subscribes to notifications.
+6. Firmware sends basic device info and periodic telemetry.
+
+Disconnect behavior:
+
+When the phone disconnects, the firmware restarts BLE advertising so the phone
+can reconnect later.
+
+Recommended mobile app behavior:
+
+1. Scan for Service UUID 8f7f0001-6b21-4f5e-9c7e-123456780001.
+2. Use the device name DBx01 only as a secondary filter.
+3. Connect to the device.
+4. Enable notifications on the characteristic.
+5. Write commands as UTF-8/ASCII text.
+6. Parse incoming lines by header: [INF], [DAT], [ERR].
+7. Reconnect automatically when the device appears again.
+
+
+5. Message Format
+-----------------
+
+All BLE messages are plain text.
+
+No JSON is used.
+No binary frame is used.
+Commands are separated by spaces.
+Responses are key/value lists.
+
+Common response headers:
+
+[INF] informational message
+[DAT] data/state message
+[ERR] error message
+
+The mobile app should parse fields by key name and ignore unknown fields for
+forward compatibility.
+
+
+6. Periodic Notifications
+-------------------------
+
+On first BLE connection, and then every info interval:
+
+[INF] device: name:DBx01, firmware:0.4.0, protocol:0x04, product_id:<hex>, uptime_s:<seconds>
+
+Every telemetry interval:
+
+[DAT] sensors: temp_c:<value>, humidity_pct:<value>, co2_ppm:<value>, lux:<value>, tvoc_ppb:<value>, aqi:<value>
+
+[DAT] config: sample_ms:<value>, samples:<value>, temp_unit:<value>, display_design:<value>, display_fps:<value>, usb:<mounted|unmounted>
+
+If light control is enabled:
+
+[DAT] light: enabled:<true|false>, mode:<one|two|composite>, brightness:<0-65535>, kelvin:<0-65535>, cold_min:<value>, cold_max:<value>, warm_min:<value>, warm_max:<value>
+
+
+7. BLE Commands
+---------------
+
+The phone writes these commands to the BLE characteristic.
+
+General information:
+
+info
+info?
+program
+program?
+
+Sensor data:
+
+sensors
+sensors?
+sensor
+sensor?
+
+Configuration state:
+
+config
+config?
+
+Light state:
+
+light
+light?
+light state
+
+Light control:
+
+light enabled <on|off|1|0|true|false|yes|no>
+light brightness <0-65535>
+light kelvin <0-65535>
+light mode <0|1|2|one|two|composite|simple|dual>
+light sync
+
+
+8. Command Responses
+--------------------
+
+info / info? / program / program?:
+
+[INF] device: name:DBx01, firmware:0.4.0, protocol:0x04, product_id:<hex>, uptime_s:<seconds>
+
+sensors / sensors? / sensor / sensor?:
+
+[DAT] sensors: temp_c:<value>, humidity_pct:<value>, co2_ppm:<value>, lux:<value>, tvoc_ppb:<value>, aqi:<value>
+
+config / config?:
+
+[DAT] config: sample_ms:<value>, samples:<value>, temp_unit:<value>, display_design:<value>, display_fps:<value>, usb:<mounted|unmounted>
+
+light / light? / light state:
+
+[DAT] light: enabled:<true|false>, mode:<one|two|composite>, brightness:<0-65535>, kelvin:<0-65535>, cold_min:<value>, cold_max:<value>, warm_min:<value>, warm_max:<value>
+
+light enabled <value>:
+
+[DAT] light: enabled:<true|false>, mode:<one|two|composite>, brightness:<0-65535>, kelvin:<0-65535>, cold_min:<value>, cold_max:<value>, warm_min:<value>, warm_max:<value>
+
+light brightness <value>:
+
+[DAT] light: enabled:<true|false>, mode:<one|two|composite>, brightness:<0-65535>, kelvin:<0-65535>, cold_min:<value>, cold_max:<value>, warm_min:<value>, warm_max:<value>
+
+light kelvin <value>:
+
+[DAT] light: enabled:<true|false>, mode:<one|two|composite>, brightness:<0-65535>, kelvin:<0-65535>, cold_min:<value>, cold_max:<value>, warm_min:<value>, warm_max:<value>
+
+light mode <value>:
+
+[DAT] light: enabled:<true|false>, mode:<one|two|composite>, brightness:<0-65535>, kelvin:<0-65535>, cold_min:<value>, cold_max:<value>, warm_min:<value>, warm_max:<value>
+
+
+9. Error Responses
+------------------
+
+Unknown BLE command:
+
+[ERR] ble.command.unknown
+
+Trying to modify brightness, kelvin or mode while light is disabled:
+
+[ERR] ble.light.disabled
+
+Invalid light enabled value:
+
+[ERR] ble.light.enabled.invalid
+
+Invalid brightness value:
+
+[ERR] ble.light.brightness.invalid
+
+Invalid kelvin value:
+
+[ERR] ble.light.kelvin.invalid
+
+Invalid light mode value:
+
+[ERR] ble.light.mode.invalid
+
+Unknown light subcommand:
+
+[ERR] ble.light.command.unknown
+
+
+10. Light Control Notes
+-----------------------
+
+The light system must be enabled before changing brightness, kelvin or mode.
+
+Recommended sequence:
+
+light enabled on
+light mode composite
+light brightness 32768
+light kelvin 32768
+
+Brightness and kelvin use the firmware internal 16-bit range:
+
+minimum: 0
+maximum: 65535
+
+These values are not percentages. The mobile app may present them as percent,
+slider value, kelvin label or any other user-facing format, but the BLE protocol
+uses the raw 16-bit value.
+
+
+11. Payload Limits
+------------------
+
+BLE commands should be short plain text lines.
+
+Current firmware command buffer:
+
+95 usable characters plus string terminator
+
+Keep writes below 95 characters.
+
+Telemetry notifications are also plain text. The mobile app should not assume
+that all notifications have the same type or the same field count.
+
+
+12. Security
+------------
+
+Current BLE protocol does not define pairing, bonding, encryption or app-level
+authentication.
+
+Do not send secrets through this protocol.
+Do not expose safety-critical actions without adding authentication.
+
+Future recommended additions:
+
+pairing mode
+bonded device allowlist
+session token
+write protection for critical commands
+
+
+13. Relation With USB Protocol
+------------------------------
+
+USB and BLE are separate communication surfaces.
+
+USB is the main PC control/debug/configuration channel.
+BLE is the mobile proximity/status/control channel.
+
+USB may be used to configure wireless behavior through commands such as:
+
+wireless?
+wireless on
+wireless off
+wireless pair
+
+BLE itself only exposes the smaller mobile-oriented command set documented in
+this file.
+
+
+14. Versioning Rules
+--------------------
+
+Increase the BLE protocol version when changing:
+
+GATT UUIDs
+command names
+field names
+field units
+error names
+required command behavior
+
+Adding optional fields to existing [DAT] or [INF] messages should be treated as
+backward compatible if old fields are preserved.
+

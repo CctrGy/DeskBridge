@@ -1,0 +1,26 @@
+{
+  "name": "Generic STM32G030F6P6",
+  "vendor": "Generic",
+  "url": "https://www.st.com/en/microcontrollers-microprocessors/stm32g030f6.html",
+  "frameworks": ["arduino", "cmsis", "stm32cube"],
+  "build": {
+    "core": "stm32",
+    "cpu": "cortex-m0plus",
+    "mcu": "stm32g030f6p6",
+    "f_cpu": "64000000L",
+    "variant": "STM32G0xx/G030F6P",
+    "extra_flags": [
+      "-DSTM32G030xx"
+    ]
+  },
+  "upload": {
+    "maximum_size": 32768,
+    "maximum_ram_size": 8192,
+    "protocol": "stlink",
+    "protocols": ["stlink", "serial"]
+  },
+  "debug": {
+    "openocd_target": "stm32g0x",
+    "svd_path": "STM32G030.svd"
+  }
+}

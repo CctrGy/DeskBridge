@@ -52,6 +52,11 @@ public:
         DeskUSB::mediaMute();
     }
 
+    void media(uint16_t usage)
+    {
+        DeskUSB::mediaControl(usage);
+    }
+
     void press(uint8_t modifier, uint8_t keycode)
     {
         DeskUSB::keyboardPress(modifier, keycode);
@@ -63,7 +68,7 @@ public:
     }
 };
 
-class USBClass
+class DeskBridgeUSBClass
 {
 public:
     void begin()
@@ -111,4 +116,4 @@ private:
     USBKeyboard keyboard_;
 };
 
-extern USBClass USB;
+extern DeskBridgeUSBClass DeskBridgeUSB;

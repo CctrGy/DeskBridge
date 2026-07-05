@@ -1,3 +1,3 @@
 #include "USB.hpp"
 
-USBClass USB;
+DeskBridgeUSBClass DeskBridgeUSB;

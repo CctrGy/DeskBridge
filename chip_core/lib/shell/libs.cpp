@@ -1,21 +1,52 @@
 #include "libs.h"
 
+#include <ctype.h>
 #include <stdio.h>
 #include <string.h>
 
+#include "core/ErrorCodes.h"
 #include "commands.h"
 
 namespace
 {
+    bool equalsHeader(const char *left, const char *right)
+    {
+        while (*left != '\0' && *right != '\0')
+        {
+            if (tolower(static_cast<unsigned char>(*left)) != tolower(static_cast<unsigned char>(*right)))
+            {
+                return false;
+            }
+            ++left;
+            ++right;
+        }
+        return *left == '\0' && *right == '\0';
+    }
+
+    bool isInputProtocolHeader(const char *header)
+    {
+        return equalsHeader(header, "SHL") ||
+               equalsHeader(header, "CMD") ||
+               equalsHeader(header, "DAT") ||
+               equalsHeader(header, "STK") ||
+               equalsHeader(header, "STE") ||
+               equalsHeader(header, "INF") ||
+               equalsHeader(header, "CNF") ||
+               equalsHeader(header, "PRG");
+    }
+
     const char *stripProtocolPrefix(const char *line)
     {
-        if (strncmp(line, "[SHL]", 5) == 0 || strncmp(line, "[CMD]", 5) == 0 ||
-            strncmp(line, "[CNF]", 5) == 0 || strncmp(line, "[PRG]", 5) == 0)
+        if (line[0] == '[' && line[4] == ']')
         {
-            line += 5;
-            while (*line == ' ')
+            char header[4] = {line[1], line[2], line[3], '\0'};
+            if (isInputProtocolHeader(header))
             {
-                ++line;
+                line += 5;
+                while (*line == ' ')
+                {
+                    ++line;
+                }
             }
         }
         return line;
@@ -32,7 +63,8 @@ void Shell::begin(ReadFn readFn, WriteFn writeFn)
     if (ready_)
     {
         writeLine("[INF] DeskBridge shell ready");
-        writeLine("[MRK] 0xA001 shell.begin");
+        writeLine("[MRK] 0x0000A001 shell.begin");
+        writeLine("[LOG] shell: ready");
         writePrompt();
     }
 }
@@ -73,6 +105,42 @@ void Shell::writeLine(const char *text)
     writeFn_("\r\n", 2);
 }
 
+void Shell::writeAsyncLine(const char *text)
+{
+    if (!writeFn_ || !text)
+    {
+        return;
+    }
+
+    writeFn_("\r\n", 2);
+    writeLine(text);
+    writePrompt();
+}
+
+void Shell::writeTuiNotification(const char *code, const char *summary, const char *detail)
+{
+    char line[192] = {};
+    snprintf(line,
+             sizeof(line),
+             "[TFI] %s %s | %s",
+             code && code[0] != '\0' ? code : "0x00000000",
+             summary && summary[0] != '\0' ? summary : "notification",
+             detail && detail[0] != '\0' ? detail : summary && summary[0] != '\0' ? summary : "notification");
+    writeLine(line);
+}
+
+void Shell::writeAsyncTuiNotification(const char *code, const char *summary, const char *detail)
+{
+    char line[192] = {};
+    snprintf(line,
+             sizeof(line),
+             "[TFI] %s %s | %s",
+             code && code[0] != '\0' ? code : "0x00000000",
+             summary && summary[0] != '\0' ? summary : "notification",
+             detail && detail[0] != '\0' ? detail : summary && summary[0] != '\0' ? summary : "notification");
+    writeAsyncLine(line);
+}
+
 void Shell::processByte(char value)
 {
     if (value == '\r')
@@ -98,7 +166,9 @@ void Shell::processByte(char value)
 
     if (lineLength_ >= sizeof(line_) - 1)
     {
-        writeLine("[ERR] 0xE001 line too long");
+        char error[64] = {};
+        snprintf(error, sizeof(error), "[ERR] 0x%08lX line too long", static_cast<unsigned long>(DeskError::ShellLineTooLong));
+        writeLine(error);
         resetLine();
         writePrompt();
         return;
@@ -130,7 +200,9 @@ void Shell::processLine()
         }
         else
         {
-            writeLine("[ERR] 0xE002 unknown command");
+            char error[64] = {};
+            snprintf(error, sizeof(error), "[ERR] 0x%08lX unknown command", static_cast<unsigned long>(DeskError::ShellUnknownCommand));
+            writeLine(error);
         }
     }
 

@@ -17,6 +17,12 @@ namespace StatusIndicator
 {
     void begin()
     {
+        if (STATUS_LED_PIN == NC)
+        {
+            ledEnabled = false;
+            return;
+        }
+
         pinMode(STATUS_LED_PIN, OUTPUT);
         digitalWrite(STATUS_LED_PIN, HIGH);
     }
@@ -26,7 +32,10 @@ namespace StatusIndicator
         if (!ledEnabled || !DeskUSB::cdcConnected(DeskUSB::CONTROL))
         {
             ledOn = false;
-            digitalWrite(STATUS_LED_PIN, HIGH);
+            if (STATUS_LED_PIN != NC)
+            {
+                digitalWrite(STATUS_LED_PIN, HIGH);
+            }
             return;
         }
 
@@ -38,7 +47,10 @@ namespace StatusIndicator
 
         lastBlinkMs = now;
         ledOn = !ledOn;
-        digitalWrite(STATUS_LED_PIN, ledOn ? LOW : HIGH);
+        if (STATUS_LED_PIN != NC)
+        {
+            digitalWrite(STATUS_LED_PIN, ledOn ? LOW : HIGH);
+        }
     }
 
     bool enabled()
@@ -50,6 +62,9 @@ namespace StatusIndicator
     {
         ledEnabled = value;
         ledOn = false;
-        digitalWrite(STATUS_LED_PIN, HIGH);
+        if (STATUS_LED_PIN != NC)
+        {
+            digitalWrite(STATUS_LED_PIN, HIGH);
+        }
     }
 }

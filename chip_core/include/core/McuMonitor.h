@@ -13,5 +13,6 @@ namespace McuMonitor
     uint32_t coreClockHz();
     uint32_t uptimeSeconds();
     const char *chipName();
+    const char *uniqueIdHex();
     const char *resetReason();
 }

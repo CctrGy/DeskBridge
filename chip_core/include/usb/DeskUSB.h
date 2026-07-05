@@ -62,6 +62,7 @@ namespace DeskUSB
 
     // Consumer-control mute key. Best for OS-level mute/unmute.
     void mediaMute();
+    void mediaControl(uint16_t usage);
 
     // Normal keyboard helpers for F13/F14/macros later.
     void keyboardPress(uint8_t modifier, uint8_t keycode);

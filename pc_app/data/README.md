@@ -19,7 +19,8 @@ Keep Python source code outside this directory.
   last_connection: None
   log_level: INFO
   language: english
-  terminal_palette: default
+  terminal_color: on
+  terminal_palette: dark
   history_limit: 200
   history_visual_size: 25
 }
@@ -33,9 +34,13 @@ still match `1209:DB01`.
 Valid values are `DEBUG`, `INFO`, `USER`, `WARNING`, `ERROR`, and `CRITICAL`.
 
 `language` stores the selected shell language. Language files are named
-`shell_<language>.json` inside `data/settings/languaje`.
+`shell_<language>.json` inside `data/settings/language`.
 
-`terminal_palette` selects a palette from `data/settings/terminal_palete.json`.
+`terminal_color` enables or disables CLI colors.
+
+`terminal_palette` stores the selected palette id from
+`data/settings/palete/palete.config`. Palette JSON files live in
+`data/settings/palete`, and the file name without `.json` is the palette id.
 
 `history_limit` is the maximum remembered command count. `history_visual_size`
 is the number of commands shown by the `history` command.

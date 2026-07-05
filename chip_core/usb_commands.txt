@@ -1,170 +1,874 @@
-DeskBridge USB Serial Command Shell
-===================================
+DeskBridge USB / BLE Command Protocol
+=====================================
 
-Canal:
-- Puerto Serial USB principal del firmware.
-- Prompt del dispositivo: db>
-- Comandos en texto plano ASCII, terminados con salto de linea.
-- Respuestas legibles en texto plano con formato de lista:
-  grupo: clave:valor, clave:valor, ...
-- Las respuestas de consulta no usan cabeceras tipo [usb].
-- ok: indica cambio aplicado.
-- ERR indica comando incorrecto, argumento invalido o dispositivo no disponible.
+Documento del protocolo actual entre:
+- PC App <-> CHIP_CORE por USB CDC Serial.
+- Mobile App <-> CHIP_CORE por BLE GATT.
+- CHIP_CORE <-> CHIP_KEYPAD por UART interno.
 
-Ejemplos de respuesta:
-
-program: name:DeskBridge chip_core, firmware:0.3.0, version:0.3.0, protocol:3, build:1760000000
-usb: vid:0x1209, pid:0xDB01, bcd:0x0300, mounted:yes, vbus:yes, id:floating, cdc:open
-device: name:DS3231, addr:0x68, state:ok
-sensor_data: name:AHT21, temp_c:24.2, humidity_pct:45.3
-ok: light.updated:done
+Firmware documentado:
+- Firmware: 0.4.0
+- Serial protocol: 0x04
+- USB VID/PID: 0x1209 / 0xDB01
+- USB bcdDevice: 0x0400
 
 
-Comandos basicos
-================
-
-help
-  Lista minima de variantes de comandos soportadas.
-
-ping
-  Comprueba si el firmware responde.
-  Respuesta: ping: state:pong
-
-info?
-  Informacion general del dispositivo.
-  Respuesta: info: device:..., firmware:..., protocol:..., usb:..., cdc:..., uptime_s:...
-
-usb?
-  Informacion USB.
-  Respuesta: usb: vid:..., pid:..., bcd:..., mounted:..., vbus:..., id:..., cdc:...
-
-program?
-  Informacion del programa cargado.
-  Respuesta: program: name:..., firmware:..., version:..., protocol:..., build:...
-
-
-Sistema
-=======
-
-sys?
-sys local
-  Informacion local del chip: modelo, frecuencia, temperatura interna, VDDA,
-  razon de reset y uptime.
-
-sys chips
-sys chip
-sys peripherals
-sys periferics
-  Estado de perifericos de sistema: DS3231, AT24C32 y Keypad.
-
-reset
-reset peripherals
-  Fuerza reset de los perifericos conocidos. Actualmente resetea Keypad.
-
-reset keypad
-  Fuerza reset solo del chip Keypad.
-
-reset settings
-  Restaura configuracion EEPROM a valores por defecto y sincroniza Keypad.
-
-reset core
-reset mcu
-  Reinicia el microcontrolador CORE. El puerto USB se desconecta unos segundos.
-
-
-Bus de sensores
-===============
-
-bus?
-  Estado general del bus de sensores, time_read, samples y sensores.
-
-bus scan
-  Escanea el bus I2C de sensores y lista direcciones encontradas.
-
-bus time_read
-bus time_read [value]
-  Lee o configura el intervalo de lectura de sensores.
-  Formatos aceptados: 1000, 1000ms, 1.5s.
-
-bus samples
-bus samples [value]
-  Lee o configura el numero de muestras para promedio.
-
-bus sensor
-  Lista sensores disponibles.
-
-bus sensor [sel]
-  Muestra estado y ultima medicion de un sensor.
-  Selectores validos: 0..4, ENS160, AHT21, VEML7700, SCD41, SHT21.
-
-
-RTC
-===
-
-rtc?
-  Estado del RTC DS3231 y flag lost_power.
-
-rtc get
-  Muestra fecha y hora: YYYY-MM-DDTHH:MM:SS.
-
-rtc set [value]
-  Ajusta fecha y hora.
-  Formatos:
-    YYYY-MM-DDTHH:MM:SS
-    YYYY-MM-DD_HH:MM:SS
-
-
-Luz / Keypad
-===============
-
-light?
-  Muestra configuracion de luz, estado de Keypad, PWM y consumo.
-
-light enabled [on|off|1|0]
-  Habilita o deshabilita la tira.
-
-light mode [0|1|2|one|two|composite]
-  Configura modo:
-    0 / one        = OneSimple
-    1 / two        = TwoSimple
-    2 / composite  = Composite
-
-light brightness [0..65535]
-  Configura brillo en PWM 16-bit.
-
-light kelvin [0..65535]
-  Configura mezcla de blancos: 0 caliente, 65535 frio.
-
-light cold_min [0..65535]
-light cold_max [0..65535]
-light warm_min [0..65535]
-light warm_max [0..65535]
-  Configura limites PWM de cada canal blanco.
-
-light click [ms]
-light long [ms]
-light repeat [ms]
-  Configura tiempos de botones gestionados por Keypad.
-
-light brightness_step [1..8192]
-light kelvin_step [1..8192]
-  Configura pasos de ajuste.
-
-light power
-  Lee consumo monitorizado por Keypad: corriente, voltaje y ADC raw.
-
-light sync
-  Reenvia toda la configuracion de luz actual al chip Keypad.
-
-keypad?
-  Vista resumida del chip Keypad.
-
-
-Comandos eliminados
+1. Canal USB fisico
 ===================
 
-sensor?
-sensor [sel]
-  Eliminados como comandos raiz. Usar:
-    bus sensor
-    bus sensor [sel]
+Canal:
+- USB CDC principal.
+- Un solo puerto COM visible en Windows.
+- Comandos ASCII en texto plano.
+- Cada comando termina con salto de linea.
+- El prompt `db>` pertenece a la shell del firmware.
+
+Formato enviado por el PC:
+  [HEADER] comando argumentos
+
+Ejemplos:
+  [SHL] ping
+  [CMD] program?
+  [DAT] display fps 30
+
+
+2. Headers PC -> CHIP_CORE
+==========================
+
+[SHL]
+  Comando de shell interactivo. Lo usa la terminal CLI humana.
+
+[CMD]
+  Comando directo invocado por programa, GUI, TUI o llamada automatizada.
+
+[DAT]
+  Escritura/consulta de datos de configuracion.
+  Actualmente el firmware interpreta el payload con el mismo parser de comandos.
+
+[STK]
+  Paquete tipo diccionario.
+  Reservado para datos estructurados futuros.
+
+[STE]
+  Escritura/consulta de estado.
+  Actualmente el firmware interpreta el payload con el mismo parser de comandos.
+
+[INF]
+  Consulta informativa.
+  Actualmente el firmware interpreta el payload con el mismo parser de comandos.
+
+[CNF]
+  Configuracion heredada.
+  Reservado.
+
+[PRG]
+  Programa/interfaz futura.
+  Reservado.
+
+
+3. Headers CHIP_CORE -> PC
+==========================
+
+[RSP]
+  Respuesta normal.
+
+[ERR]
+  Error con codigo de 32 bits.
+
+[MRK]
+  Marcador interno no critico.
+
+[LOG]
+  Mensaje que el programa de PC debe guardar en log.
+
+[EVT]
+  Evento del firmware.
+
+[TSK]
+  Peticion de tarea al PC.
+
+[DAT]
+  Dato o variable.
+
+[STE]
+  Estado tecnico.
+
+[STK]
+  Paquete de variables tipo diccionario.
+
+[INF]
+  Informacion generica.
+
+
+4. Formato de respuesta
+=======================
+
+Respuesta normal:
+  [RSP] grupo: clave:valor, clave:valor
+
+Error:
+  [ERR] 0x00000000 descripcion
+
+Marcador:
+  [MRK] 0x00000000 descripcion
+
+Log:
+  [LOG] descripcion
+
+Notas de parseo:
+- El grupo de una respuesta `[RSP]` es el texto antes del primer `:`.
+- Los pares de datos usan formato `clave:valor`.
+- Un comando puede devolver varias lineas `[RSP]`.
+- El PC debe leer hasta el prompt `db>`.
+
+
+5. Codigos actuales
+===================
+
+Errores:
+  0x00010001 shell line too long
+  0x00010002 shell unknown command
+  0x00011001 uso incorrecto del comando
+  0x00011002 argumento invalido
+  0x0001FFFF error generico de comando
+  0x00020001 sensor desconocido
+  0x00030001 falta valor RTC
+  0x00030002 valor RTC invalido
+  0x00030003 RTC no preparado
+  0x00040001 CHIP_KEYPAD no responde
+  0x00041001 campo de luz desconocido
+  0x00050001 objetivo de reset desconocido
+
+Marcadores:
+  0x0000A001 shell.begin
+  0x0000A101 light.config.updated
+  0x0000A201 reset.keypad
+  0x0000A202 reset.settings
+  0x0000A203 reset.core
+
+
+6. Comandos USB soportados por CHIP_CORE
+========================================
+
+Core / informacion:
+  ping
+  info?
+  usb?
+  program?
+
+Display / OLED:
+  display?
+  display fps
+  display fps [15..50]
+
+System / chips:
+  sys?
+  sys
+  sys local
+  sys chip
+  sys chips
+  sys peripherals
+  sys periferics
+
+Bus de sensores:
+  bus?
+  bus scan
+  bus time_read
+  bus time_read [value]
+  bus samples
+  bus samples [value]
+  bus sensor
+  bus sensor [sel]
+
+Selectores de sensor:
+  0
+  1
+  2
+  3
+  4
+  ENS160
+  AHT21
+  VEML7700
+  SCD41
+  SHT21
+
+RTC:
+  rtc?
+  rtc get
+  rtc set [YYYY-MM-DDTHH:MM:SS]
+  rtc set [YYYY-MM-DD_HH:MM:SS]
+
+Keypad:
+  keypad?
+  keypad
+  keypad action list
+  keypad action [0..4] [action]
+
+Acciones de keypad aceptadas:
+  0 / none
+  1 / mute / media_mute
+  2 / volume_up / vol_up
+  3 / volume_down / vol_down
+  4 / play_pause / play
+  5 / next / media_next
+  6 / previous / prev / media_previous
+  7 / f13
+  8 / f14
+  9 / f15
+
+Light / power:
+  light?
+  light
+  light power
+  light sync
+  light enabled [on|off|1|0|true|false|yes|no]
+  light mode [0|1|2|one|two|composite|simple|twosimple|dual]
+  light brightness [0..65535]
+  light kelvin [0..65535]
+  light cold_min [0..65535]
+  light cold_max [0..65535]
+  light warm_min [0..65535]
+  light warm_max [0..65535]
+  light click [ms]
+  light long [ms]
+  light repeat [ms]
+  light brightness_step [1..8192]
+  light kelvin_step [1..8192]
+
+Wireless BLE:
+  wireless?
+  wireless
+  wireless state
+  wireless on
+  wireless off
+  wireless pair
+  wireless enabled
+  wireless enabled [on|off|1|0|true|false|yes|no]
+  wireless name
+  wireless name [name]
+  wireless apply
+  wireless write [text]
+  wireless rx
+
+Reset:
+  reset
+  reset peripherals
+  reset periferics
+  reset keypad
+  reset settings
+  reset core
+  reset mcu
+
+Comandos eliminados:
+  sensor?
+  sensor [sel]
+
+Sustitucion:
+  bus sensor
+  bus sensor [sel]
+
+
+7. Respuestas USB esperadas
+===========================
+
+ping:
+  [RSP] ping: state:pong
+
+info?:
+  [RSP] info: device:DeskBridge chip_core, product_id:00112233445566778899AABB, firmware:0.4.0, protocol:0x04, usb:mounted, cdc:open, uptime_s:12
+
+usb?:
+  [RSP] usb: vid:0x1209, pid:0xDB01, bcd:0x0400, mounted:yes, vbus:no, id:floating, cdc:open
+
+program?:
+  [RSP] program: name:DeskBridge chip_core, firmware:0.4.0, version:0.4.0, protocol:0x04, usb_bcd:0x0400, build:1760000000
+
+display?:
+  [RSP] display: design:0, fps:20, timeout_enabled:yes, timeout_ms:15000, active_mode:0, clock_start:480, clock_end:1320
+
+display fps:
+  [RSP] display_fps: value:20, min:15, max:50
+
+display fps 30:
+  [RSP] ok: display.fps:30
+
+sys local:
+  [RSP] system: chip:ESP32-S3, clock_hz:240000000, temp_c:45.2, vdda_v:0.00, reset:poweron, uptime_s:12
+
+sys peripherals:
+  [RSP] system_peripherals: count:3
+  [RSP] device: name:DS3231, addr:0x68, state:ok
+  [RSP] device: name:AT24C32, addr:0x50, state:ok
+  [RSP] device: name:Keypad, addr:0x00, state:fail
+
+bus?:
+  [RSP] bus: time_read_ms:6000, samples:1, sensors:5
+  [RSP] device: name:ENS160, addr:0x53, state:ok
+  [RSP] device: name:AHT21, addr:0x38, state:ok
+  [RSP] device: name:VEML7700, addr:0x10, state:ok
+  [RSP] device: name:SCD41, addr:0x62, state:ok
+  [RSP] device: name:SHT21, addr:0x40, state:ok
+
+bus scan:
+  [RSP] bus_scan: found:3
+  [RSP] bus_addr: index:0, addr:0x38
+
+bus time_read:
+  [RSP] bus_time_read: value_ms:6000
+
+bus time_read 5:
+  [RSP] ok: bus.time_read_ms:5000
+
+bus samples:
+  [RSP] bus_samples: value:1
+
+bus samples 4:
+  [RSP] ok: bus.samples:4
+
+bus sensor:
+  [RSP] sensor: index:0, name:ENS160, state:ok
+
+bus sensor AHT21:
+  [RSP] sensor_data: name:AHT21, temp_c:24.2, humidity_pct:45.3
+
+rtc?:
+  [RSP] rtc: state:ok, lost_pwr:no
+
+rtc get:
+  [RSP] rtc_time: value:2026-07-04T12:30:00
+
+rtc set 2026-07-04T12:30:00:
+  [RSP] ok: rtc.set:done
+
+keypad?:
+  [RSP] keypad: state:ok, protocol:TXT1, event_pin:low, state_pin:low, irq:on, irq_count:0, event_code:0, action_id:0, action:none
+  [RSP] keypad_buttons: pressed:0, released:0, down:0, last:255, edge:0, assign:0/1/2/3/4
+  [RSP] keypad_light: enabled:yes, mode:2, brightness:16384, kelvin:32767, pwm_cold:0, pwm_warm:0, current_ma:0, voltage_mv:0, power_mw:0, raw_current:0, raw_voltage:0
+
+keypad action list:
+  [RSP] keypad_actions: 0:none, 1:mute, 2:volume_up, 3:volume_down, 4:play_pause, 5:next, 6:previous, 7:f13, 8:f14, 9:f15
+
+keypad action 0 mute:
+  [MRK] 0x0000A301 keypad.action.updated
+  [RSP] ok: keypad.button:0, action_id:1, action:mute
+
+light?:
+  [RSP] light: enabled:yes, mode:Composite, brightness:16384, brightness_min:0, brightness_max:65535, kelvin:32767, cold_min:0, cold_max:65535, warm_min:0, warm_max:65535
+  [RSP] light_buttons: click_ms:600, long_ms:600, repeat_ms:40, brightness_step:2048, kelvin_step:2048
+  [RSP] light_power: keypad:ok, pwm_cold:0, pwm_warm:0, current_ma:0, raw_current:0, voltage_mv:0
+
+light brightness 30000:
+  [MRK] 0x0000A101 light.config.updated
+  [LOG] light: config updated
+  [RSP] ok: light.updated:done
+
+light power:
+  [RSP] light_power: state:ok, current_ma:0, voltage_mv:0, power_mw:0, raw_current:0, raw_voltage:0
+
+wireless?:
+  [RSP] wireless: enabled:yes, mode:ble_device, state:ble_advertising, pending:no, ble_name:DBx01, ble_connected:no, ble_count:0
+
+wireless name DBx01:
+  [RSP] ok: wireless.name:DBx01, pending:yes
+
+wireless apply:
+  [RSP] ok: apply:done, state:ble_advertising
+
+wireless rx:
+  [RSP] wireless_rx: pending:no, value:
+
+reset keypad:
+  [MRK] 0x0000A201 reset.keypad
+  [RSP] ok: reset:keypad
+
+
+8. Programa de PC: comandos que generan USB
+===========================================
+
+El programa de PC tiene varias capas:
+- SDK Python.
+- CLI interactiva.
+- TUI.
+- GUI/WebView.
+
+Todos estos comandos acaban enviando uno de los comandos USB anteriores.
+
+SDK CoreModule:
+  device.ping()
+    -> ping
+
+  device.core.info()
+    -> info?
+
+  device.core.usb()
+    -> usb?
+
+  device.core.program()
+    -> program?
+
+SDK DisplayModule:
+  device.display.get()
+    -> display?
+
+  device.display.fps()
+    -> display fps
+
+  device.display.fps(value)
+    -> display fps [value]
+
+SDK SystemModule:
+  device.system.local()
+    -> sys local
+
+  device.system.peripherals()
+    -> sys peripherals
+
+  device.system.periferics()
+    -> sys peripherals
+
+SDK BusModule:
+  device.bus.get()
+    -> bus?
+
+  device.bus.scan()
+    -> bus scan
+
+  device.bus.time_read()
+    -> bus time_read
+
+  device.bus.time_read(value)
+    -> bus time_read [value]
+
+  device.bus.samples()
+    -> bus samples
+
+  device.bus.samples(value)
+    -> bus samples [value]
+
+  device.bus.sensors()
+    -> bus sensor
+
+  device.bus.sensor(selector)
+    -> bus sensor [selector]
+
+SDK KeypadModule:
+  device.keypad.get()
+    -> keypad?
+
+  device.keypad.action_list()
+    -> keypad action list
+
+  device.keypad.set_action(button, action)
+    -> keypad action [button] [action_id]
+
+SDK LightModule:
+  device.light.get()
+    -> light?
+
+  device.light.power()
+    -> light power
+
+  device.light.sync()
+    -> light sync
+
+  device.light.set(field, value)
+    -> light [field] [value]
+
+  device.light.enabled(value)
+    -> light enabled [value]
+
+  device.light.mode(value)
+    -> light mode [value]
+
+  device.light.brightness(value)
+    -> light brightness [value]
+
+  device.light.kelvin(value)
+    -> light kelvin [value]
+
+  device.light.cold_min(value)
+    -> light cold_min [value]
+
+  device.light.cold_max(value)
+    -> light cold_max [value]
+
+  device.light.warm_min(value)
+    -> light warm_min [value]
+
+  device.light.warm_max(value)
+    -> light warm_max [value]
+
+  device.light.click(value)
+    -> light click [value]
+
+  device.light.long(value)
+    -> light long [value]
+
+  device.light.repeat(value)
+    -> light repeat [value]
+
+  device.light.brightness_step(value)
+    -> light brightness_step [value]
+
+  device.light.kelvin_step(value)
+    -> light kelvin_step [value]
+
+SDK RtcModule:
+  device.rtc.status()
+    -> rtc?
+
+  device.rtc.get()
+    -> rtc get
+
+  device.rtc.set(value)
+    -> rtc set [YYYY-MM-DDTHH:MM:SS]
+
+  device.rtc.get_date()
+    -> rtc get
+    -> parsea solo fecha en Python.
+
+  device.rtc.get_time()
+    -> rtc get
+    -> parsea solo hora en Python.
+
+  device.rtc.set_date("DD/MM/YYYY")
+    -> rtc get
+    -> rtc set [YYYY-MM-DDTHH:MM:SS]
+
+  device.rtc.set_time("HH:MM:SS")
+    -> rtc get
+    -> rtc set [YYYY-MM-DDTHH:MM:SS]
+
+  device.rtc.sync()
+    -> toma datetime.now() del PC
+    -> rtc set [YYYY-MM-DDTHH:MM:SS]
+
+SDK WirelessModule:
+  device.wireless.get()
+    -> wireless?
+
+  device.wireless.state()
+    -> wireless state
+
+  device.wireless.on()
+    -> wireless on
+
+  device.wireless.off()
+    -> wireless off
+
+  device.wireless.pair()
+    -> wireless pair
+
+  device.wireless.enabled()
+    -> wireless enabled
+
+  device.wireless.enabled(value)
+    -> wireless enabled [value]
+
+  device.wireless.name()
+    -> wireless name
+
+  device.wireless.name(value)
+    -> wireless name [value]
+
+  device.wireless.apply()
+    -> wireless apply
+
+  device.wireless.write(text)
+    -> wireless write [text]
+
+  device.wireless.rx()
+    -> wireless rx
+
+SDK ResetModule:
+  device.reset.run(target)
+    -> reset [target]
+
+  device.reset.peripherals()
+    -> reset peripherals
+
+  device.reset.keypad()
+    -> reset keypad
+
+  device.reset.settings()
+    -> reset settings
+
+  device.reset.core()
+    -> reset core
+
+
+9. Programa de PC: comandos locales
+===================================
+
+Estos comandos existen en la CLI/TUI del PC, pero NO se envian al firmware por
+USB salvo que se indique lo contrario.
+
+Ayuda:
+  help
+  help local
+  help peripheral
+
+Conexion:
+  connect
+  connect [COMx]
+  disconnect
+  close
+  reconnect
+  reconnect [COMx]
+  status
+
+Terminal:
+  clear
+  cls
+  exit
+  quit
+  q
+
+Settings locales del PC:
+  settings
+  settings debug
+  settings debug [on|off]
+  debug [on|off]
+  settings log
+  settings log [DEBUG|INFO|USER|WARNING|ERROR|CRITICAL]
+  log [DEBUG|INFO|USER|WARNING|ERROR|CRITICAL]
+  settings color
+  settings color [on|off]
+  settings palete
+  settings palete list
+  settings palete reload
+  settings palete status
+  settings palete [name]
+  settings language
+  settings language list
+  settings language reload
+  settings language status
+  settings language [name]
+
+Settings locales solo TUI:
+  settings functionKey
+  settings functionKey [on|off]
+  settings size
+  settings size [cols] [lines]
+
+Historial local:
+  history
+  history limit
+  history limit [value]
+  history visualSize
+  history visualSize [value]
+
+Rutas:
+  paths
+  paths tree
+
+Firmware upload:
+  firmware_upload [chip]
+
+Notas:
+- `firmware_upload` ejecuta PlatformIO desde el PC.
+- No es un comando USB.
+- Los chips validos salen de `chip_core/platformio.ini`.
+
+
+10. CLI directo con argumentos
+==============================
+
+El programa `terminal.py` puede lanzar comandos directos sin entrar en modo
+interactivo.
+
+Comandos directos aceptados:
+  ping
+  info
+  usb
+  program
+  display
+  chip
+  bus
+  keypad
+  light
+  reset
+  rtc
+  wireless
+  wireless?
+
+Normalizacion:
+- `info` en PC acaba enviando `info?`.
+- `usb` en PC acaba enviando `usb?`.
+- `program` en PC acaba enviando `program?`.
+- `display` en PC acaba enviando `display?`.
+
+
+11. GUI / TUI / WebView
+=======================
+
+Funciones del programa que pueden generar comandos USB:
+
+startup_probe:
+  - Se ejecuta al abrir la GUI si hay conexion.
+  - Envia `program?`.
+  - Envia `rtc get`.
+
+save_preferences:
+  - Guarda preferencias locales en `pc_app/data/data.config`.
+  - No envia comandos USB.
+
+GUI wireless:
+  wireless.get
+    -> wireless?
+  wireless.state
+    -> wireless state
+  wireless.on
+    -> wireless on
+  wireless.off
+    -> wireless off
+  wireless.pair
+    -> wireless pair
+  wireless.enabled.get
+    -> wireless enabled
+  wireless.enabled.set
+    -> wireless enabled [value]
+  wireless.name.get
+    -> wireless name
+  wireless.name.set
+    -> wireless name [value]
+  wireless.apply
+    -> wireless apply
+  wireless.rx
+    -> wireless rx
+  wireless.write
+    -> wireless write [text]
+
+GUI keypad actions:
+  keypad.actions.apply
+    -> keypad action 0 [action]
+    -> keypad action 1 [action]
+    -> keypad action 2 [action]
+    -> keypad action 3 [action]
+    -> keypad action 4 [action]
+
+GUI OLED preferences:
+  - Puede guardar preferencias visuales locales del PC.
+  - El ajuste real de FPS del firmware debe hacerse con:
+    display fps [15..50]
+
+
+12. BLE movil
+=============
+
+El ESP32-S3 trabaja como periferico BLE.
+
+Advertising:
+- Nombre por defecto: DBx01
+- Si Wireless BLE esta habilitado, el firmware anuncia el servicio.
+- Al desconectar un cliente BLE, el firmware reinicia advertising.
+- La conexion automatica por cercania la debe implementar la app movil como
+  cliente BLE central, recordando el dispositivo y conectando al detectarlo.
+
+Servicio BLE GATT:
+  Device name: DBx01
+  Service UUID: 8f7f0001-6b21-4f5e-9c7e-123456780001
+  Characteristic UUID: 8f7f0002-6b21-4f5e-9c7e-123456780001
+  Properties: READ, WRITE, NOTIFY
+
+Notificaciones BLE periodicas:
+  [INF] device: name:DeskBridge chip_core, firmware:0.4.0, protocol:0x04, product_id:00112233445566778899AABB, uptime_s:12
+  [DAT] sensors: temp_c:24.1, humidity_pct:45.0, co2_ppm:620, lux:80.5, tvoc_ppb:12, aqi:1
+  [DAT] config: sample_ms:6000, samples:1, temp_unit:0, display_design:0, display_fps:20, usb:mounted
+  [DAT] light: enabled:yes, mode:Composite, brightness:16384, kelvin:32767, cold_min:0, cold_max:65535, warm_min:0, warm_max:65535
+
+Comandos BLE por escritura en la characteristic:
+  info
+  info?
+  program
+  program?
+  sensors
+  sensors?
+  sensor
+  sensor?
+  config
+  config?
+  light
+  light?
+  light enabled [on|off|1|0|true|false|yes|no]
+  light brightness [0..65535]
+  light kelvin [0..65535]
+  light mode [0|1|2|one|two|composite|simple|dual]
+  light sync
+
+Respuestas BLE:
+  [INF] device: ...
+  [DAT] sensors: ...
+  [DAT] config: ...
+  [DAT] light: ...
+  [ERR] ble.command.unknown
+  [ERR] ble.light.disabled
+  [ERR] ble.light.enabled.invalid
+  [ERR] ble.light.brightness.invalid
+  [ERR] ble.light.kelvin.invalid
+  [ERR] ble.light.mode.invalid
+
+Restricciones BLE:
+- `light brightness`, `light kelvin` y `light mode` solo se aceptan si la luz
+  esta habilitada.
+- Para habilitarla desde el movil:
+  light enabled on
+
+
+13. UART interno CORE -> CHIP_KEYPAD
+====================================
+
+Resumen fisico:
+- UART2 TX: PA2
+- UART2 RX: PA3
+- EVENT: PA9
+- STATE: PA8
+- RST: PA10
+- Baudrate UART: 115200
+- Timeout UART interno CORE -> KEYPAD: 35 ms
+
+El PC no habla directamente con CHIP_KEYPAD.
+El PC envia comandos USB al CORE y el CORE traduce parte de ellos al protocolo
+UART interno del KEYPAD.
+
+Comandos UART internos:
+  PING
+  INFO?
+  LIGHT?
+  POWER?
+  EVENT?
+  BUTTON ASSIGN?
+  EVENT CLEAR
+  CONFIG DEFAULTS
+  LIGHT SET ENABLED [0|1]
+  LIGHT SET MODE [0|1|2]
+  LIGHT SET BRIGHTNESS [0..65535]
+  LIGHT SET KELVIN [0..65535]
+  LIGHT SET COLD_MIN [0..65535]
+  LIGHT SET COLD_MAX [0..65535]
+  LIGHT SET WARM_MIN [0..65535]
+  LIGHT SET WARM_MAX [0..65535]
+  LIGHT SET BRIGHTNESS_STEP [value]
+  LIGHT SET KELVIN_STEP [value]
+  BUTTONS SET CLICK_MS [ms]
+  BUTTONS SET LONG_MS [ms]
+  BUTTONS SET REPEAT_MS [ms]
+  BUTTON SET [0..4] ACTION [id]
+
+Respuesta UART interna esperada:
+  OK KEY=value KEY=value
+
+
+14. Reglas para el software del PC
+==================================
+
+1. Enviar comandos interactivos con `[SHL]`.
+2. Enviar comandos directos/programaticos con `[CMD]`.
+3. Leer hasta `db>`.
+4. Parsear primero el header de cada linea.
+5. En `[RSP]`, usar el texto antes de `:` como grupo.
+6. Parsear pares `clave:valor`.
+7. Tratar `[ERR] 0x00000000 descripcion` como error estructurado.
+8. Guardar `[LOG]` en el log del PC.
+9. Mostrar `[MRK]` solo en modo debug o diagnostico.
+10. Mantener compatibilidad con varias lineas por comando.

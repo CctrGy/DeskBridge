@@ -13,24 +13,19 @@
 #include "bus/KeypadPeripheral.h"
 #include "config/DeskConfig.h"
 #include "core/DeskBridgeVersion.h"
+#include "core/ErrorCodes.h"
 #include "core/DeskSettings.h"
 #include "core/McuMonitor.h"
 #include "libs.h"
 #include "light/StripLight.h"
 #include "usb/DeskUSB.h"
-
-#ifndef DESKBRIDGE_USB_VID
-    #define DESKBRIDGE_USB_VID 0x1209
-#endif
-
-#ifndef DESKBRIDGE_USB_PID
-    #define DESKBRIDGE_USB_PID 0xDB01
-#endif
+#include "usb/usb_descriptors.h"
+#include <Antenna.hpp>
 
 namespace
 {
     constexpr uint8_t maxTokens = 5;
-    constexpr uint8_t maxTokenLength = 24;
+    constexpr uint8_t maxTokenLength = 64;
 
     struct Tokens
     {
@@ -68,7 +63,38 @@ namespace
             {
                 ++detail;
             }
-            snprintf(buffer, sizeof(buffer), "[ERR] 0xE000 %s", detail);
+
+            uint32_t code = DeskError::GenericCommandError;
+            if (strncmp(detail, "use:", 4) == 0)
+            {
+                code = DeskError::CommandUsage;
+            }
+            else if (strstr(detail, "invalid") != nullptr)
+            {
+                code = DeskError::InvalidArgument;
+            }
+            else if (strstr(detail, "unknown sensor") != nullptr)
+            {
+                code = DeskError::BusUnknownSensor;
+            }
+            else if (strstr(detail, "missing rtc") != nullptr)
+            {
+                code = DeskError::RtcMissingValue;
+            }
+            else if (strstr(detail, "rtc not ready") != nullptr)
+            {
+                code = DeskError::RtcNotReady;
+            }
+            else if (strstr(detail, "keypad missing") != nullptr)
+            {
+                code = DeskError::KeypadMissing;
+            }
+            else if (strstr(detail, "unknown light field") != nullptr)
+            {
+                code = DeskError::LightUnknownField;
+            }
+
+            snprintf(buffer, sizeof(buffer), "[ERR] 0x%08lX %s", static_cast<unsigned long>(code), detail);
         }
         else
         {
@@ -158,6 +184,46 @@ namespace
         return true;
     }
 
+    bool parseKeypadActionId(const char *text, uint8_t &value)
+    {
+        uint32_t numeric = 0;
+        if (parseU32(text, numeric) && numeric <= 9)
+        {
+            value = static_cast<uint8_t>(numeric);
+            return true;
+        }
+
+        if (equalsIgnoreCase(text, "none")) { value = 0; return true; }
+        if (equalsIgnoreCase(text, "mute") || equalsIgnoreCase(text, "media_mute")) { value = 1; return true; }
+        if (equalsIgnoreCase(text, "vol_up") || equalsIgnoreCase(text, "volume_up")) { value = 2; return true; }
+        if (equalsIgnoreCase(text, "vol_down") || equalsIgnoreCase(text, "volume_down")) { value = 3; return true; }
+        if (equalsIgnoreCase(text, "play") || equalsIgnoreCase(text, "play_pause")) { value = 4; return true; }
+        if (equalsIgnoreCase(text, "next") || equalsIgnoreCase(text, "media_next")) { value = 5; return true; }
+        if (equalsIgnoreCase(text, "prev") || equalsIgnoreCase(text, "previous") || equalsIgnoreCase(text, "media_previous")) { value = 6; return true; }
+        if (equalsIgnoreCase(text, "f13")) { value = 7; return true; }
+        if (equalsIgnoreCase(text, "f14")) { value = 8; return true; }
+        if (equalsIgnoreCase(text, "f15")) { value = 9; return true; }
+
+        return false;
+    }
+
+    const char *keypadActionName(uint8_t value)
+    {
+        switch (value)
+        {
+            case 1: return "mute";
+            case 2: return "volume_up";
+            case 3: return "volume_down";
+            case 4: return "play_pause";
+            case 5: return "next";
+            case 6: return "previous";
+            case 7: return "f13";
+            case 8: return "f14";
+            case 9: return "f15";
+            default: return "none";
+        }
+    }
+
     bool parseBoolValue(const char *text, bool &value)
     {
         if (equalsIgnoreCase(text, "1") || equalsIgnoreCase(text, "on") || equalsIgnoreCase(text, "true") || equalsIgnoreCase(text, "yes"))
@@ -213,6 +279,20 @@ namespace
         DeskSettings::captureStripFromRuntime();
         DeskSettings::markDirty();
         KeypadPeripheral::syncStripConfig();
+    }
+
+    void marker(Shell &shell, uint32_t code, const char *text)
+    {
+        char buffer[96] = {};
+        snprintf(buffer, sizeof(buffer), "[MRK] 0x%08lX %s", static_cast<unsigned long>(code), text);
+        shell.writeLine(buffer);
+    }
+
+    void logLine(Shell &shell, const char *text)
+    {
+        char buffer[128] = {};
+        snprintf(buffer, sizeof(buffer), "[LOG] %s", text);
+        shell.writeLine(buffer);
     }
 
     bool parseDurationMs(const char *text, uint32_t &value)
@@ -328,8 +408,9 @@ namespace
 
     void handleInfo(Shell &shell)
     {
-        replyList(shell, "info", "device:%s, firmware:%s, protocol:%u, usb:%s, cdc:%s, uptime_s:%lu",
+        replyList(shell, "info", "device:%s, product_id:%s, firmware:%s, protocol:0x%02X, usb:%s, cdc:%s, uptime_s:%lu",
                   DeskBridgeVersion::DEVICE_NAME,
+                  McuMonitor::uniqueIdHex(),
                   DeskBridgeVersion::FIRMWARE,
                   DeskBridgeVersion::SERIAL_PROTOCOL,
                   DeskUSB::mounted() ? "mounted" : "unmounted",
@@ -352,14 +433,177 @@ namespace
     void handleProgram(Shell &shell)
     {
         const DeskBridgeVersion::Info version = DeskBridgeVersion::current();
-        replyList(shell, "program", "name:%s, firmware:%s, version:%u.%u.%u, protocol:%u, build:%lu",
+        replyList(shell, "program", "name:%s, firmware:%s, version:%u.%u.%u, protocol:0x%02X, usb_bcd:0x%04X, build:%lu",
                   version.deviceName,
                   version.firmware,
                   version.major,
                   version.minor,
                   version.patch,
                   version.serialProtocol,
+                  version.usbDeviceBcd,
                   static_cast<unsigned long>(version.buildUnixTime));
+    }
+
+    void handleDisplayQuery(Shell &shell)
+    {
+        const DeskSettings::Config &settings = DeskSettings::dataConst();
+        replyList(shell, "display", "design:%u, fps:%u, timeout_enabled:%s, timeout_ms:%lu, active_mode:%u, clock_start:%u, clock_end:%u",
+                  settings.displayDesign,
+                  settings.displayFrameRateFps,
+                  settings.displayTimeoutEnabled ? "yes" : "no",
+                  static_cast<unsigned long>(settings.displayTimeoutMs),
+                  settings.displayActiveMode,
+                  settings.displayActiveStartMinute,
+                  settings.displayActiveEndMinute);
+    }
+
+    void handleDisplay(Shell &shell, const Tokens &tokens)
+    {
+        if (tokens.count < 2)
+        {
+            handleDisplayQuery(shell);
+            return;
+        }
+
+        if (equals(tokens.value[1], "fps") || equals(tokens.value[1], "frame") || equals(tokens.value[1], "framerate"))
+        {
+            if (tokens.count < 3)
+            {
+                replyList(shell, "display_fps", "value:%u, min:%u, max:%u",
+                          DeskSettings::dataConst().displayFrameRateFps,
+                          DISPLAY_FRAME_RATE_FPS_MIN_DEFAULT,
+                          DISPLAY_FRAME_RATE_FPS_MAX_DEFAULT);
+                return;
+            }
+
+            uint32_t value = 0;
+            if (!parseU32(tokens.value[2], value))
+            {
+                reply(shell, "ERR invalid display fps value");
+                return;
+            }
+
+            DeskSettings::data().displayFrameRateFps = static_cast<uint8_t>(clampU32(value, DISPLAY_FRAME_RATE_FPS_MIN_DEFAULT, DISPLAY_FRAME_RATE_FPS_MAX_DEFAULT));
+            DeskSettings::markDirty();
+            replyList(shell, "ok", "display.fps:%u", DeskSettings::dataConst().displayFrameRateFps);
+            return;
+        }
+
+        reply(shell, "ERR use: display? | display fps [15..50]");
+    }
+
+    void handleWirelessQuery(Shell &shell)
+    {
+        replyList(shell, "wireless", "enabled:%s, mode:%s, state:%s, pending:%s, ble_name:%s, ble_connected:%s, ble_count:%lu",
+                  WirelessAntenna.enabled() ? "yes" : "no",
+                  WirelessAntenna.modeText(),
+                  WirelessAntenna.stateText(),
+                  WirelessAntenna.pendingChanges() ? "yes" : "no",
+                  WirelessAntenna.bleConfig().deviceName,
+                  WirelessAntenna.bleConnected() ? "yes" : "no",
+                  static_cast<unsigned long>(WirelessAntenna.bleConnectionCount()));
+        if (WirelessAntenna.bleRxPending())
+        {
+            replyList(shell, "wireless_rx", "value:%s", WirelessAntenna.bleLastRx());
+        }
+    }
+
+    void handleWireless(Shell &shell, const Tokens &tokens)
+    {
+        if (tokens.count < 2)
+        {
+            handleWirelessQuery(shell);
+            return;
+        }
+
+        if (equals(tokens.value[1], "state"))
+        {
+            handleWirelessQuery(shell);
+            return;
+        }
+
+        if (equals(tokens.value[1], "on") || equals(tokens.value[1], "ble") || equals(tokens.value[1], "pair"))
+        {
+            WirelessAntenna.setEnabled(true);
+            WirelessAntenna.setMode(Antenna::Mode::BleDevice);
+            const bool ok = WirelessAntenna.apply();
+            replyList(shell, ok ? "ok" : "wireless_error", "ble:%s, state:%s, name:%s", ok ? "advertising" : "fail", WirelessAntenna.stateText(), WirelessAntenna.bleConfig().deviceName);
+            return;
+        }
+
+        if (equals(tokens.value[1], "off") || equals(tokens.value[1], "stop"))
+        {
+            WirelessAntenna.stop();
+            replyList(shell, "ok", "wireless:off");
+            return;
+        }
+
+        if (equals(tokens.value[1], "enabled") || equals(tokens.value[1], "enable"))
+        {
+            if (tokens.count < 3)
+            {
+                replyList(shell, "wireless_enabled", "value:%s", WirelessAntenna.enabled() ? "yes" : "no");
+                return;
+            }
+
+            bool value = false;
+            if (!parseBoolValue(tokens.value[2], value))
+            {
+                reply(shell, "ERR invalid wireless enabled value");
+                return;
+            }
+
+            WirelessAntenna.setEnabled(value);
+            WirelessAntenna.setMode(value ? Antenna::Mode::BleDevice : Antenna::Mode::Off);
+            const bool ok = WirelessAntenna.apply();
+            replyList(shell, ok ? "ok" : "wireless_error", "enabled:%s, state:%s", WirelessAntenna.enabled() ? "yes" : "no", WirelessAntenna.stateText());
+            return;
+        }
+
+        if (equals(tokens.value[1], "name"))
+        {
+            if (tokens.count < 3)
+            {
+                replyList(shell, "wireless_name", "value:%s", WirelessAntenna.bleConfig().deviceName);
+                return;
+            }
+
+            Antenna::BleConfig config = WirelessAntenna.bleConfig();
+            strncpy(config.deviceName, tokens.value[2], sizeof(config.deviceName) - 1);
+            config.deviceName[sizeof(config.deviceName) - 1] = '\0';
+            WirelessAntenna.setBleConfig(config);
+            replyList(shell, "ok", "wireless.name:%s, pending:yes", WirelessAntenna.bleConfig().deviceName);
+            return;
+        }
+
+        if (equals(tokens.value[1], "apply"))
+        {
+            const bool ok = WirelessAntenna.apply();
+            replyList(shell, ok ? "ok" : "wireless_error", "apply:%s, state:%s", ok ? "done" : "fail", WirelessAntenna.stateText());
+            return;
+        }
+
+        if (equals(tokens.value[1], "write"))
+        {
+            if (tokens.count < 3)
+            {
+                reply(shell, "ERR use: wireless write [text]");
+                return;
+            }
+
+            const bool ok = WirelessAntenna.bleWrite(tokens.value[2]);
+            replyList(shell, ok ? "ok" : "wireless_error", "write:%s", ok ? "done" : "fail");
+            return;
+        }
+
+        if (equals(tokens.value[1], "rx"))
+        {
+            replyList(shell, "wireless_rx", "pending:%s, value:%s", WirelessAntenna.bleRxPending() ? "yes" : "no", WirelessAntenna.bleLastRx());
+            WirelessAntenna.clearBleRx();
+            return;
+        }
+
+        reply(shell, "ERR use: wireless? | wireless on|off|pair|state|enabled|name|apply|write|rx [value]");
     }
 
     void handleSys(Shell &shell, const Tokens &tokens)
@@ -492,13 +736,15 @@ namespace
     {
         const KeypadPeripheral::Snapshot &keypad = KeypadPeripheral::snapshot();
 
-        replyList(shell, "keypad", "state:%s, protocol:%s, event_pin:%s, state_pin:%s, irq:%s, irq_count:%lu, action:%s",
+        replyList(shell, "keypad", "state:%s, protocol:%s, event_pin:%s, state_pin:%s, irq:%s, irq_count:%lu, event_code:%u, action_id:%u, action:%s",
                   DeskBus::ready(DeskBus::Device::Keypad) ? "ok" : "fail",
                   keypad.protocolText[0] != '\0' ? keypad.protocolText : "unknown",
                   KeypadPeripheral::eventPending() ? "high" : "low",
                   keypad.statePin ? "high" : "low",
                   keypad.eventInterruptEnabled ? "on" : "off",
                   keypad.eventInterruptCount,
+                  keypad.lastButtonEventCode,
+                  keypad.lastActionId,
                   keypad.lastAction[0] != '\0' ? keypad.lastAction : "none");
         replyList(shell, "keypad_buttons", "pressed:%u, released:%u, down:%u, last:%u, edge:%u, assign:%u/%u/%u/%u/%u",
                   keypad.buttonPressedMask,
@@ -523,6 +769,53 @@ namespace
                   keypad.powerMw,
                   keypad.currentRaw,
                   keypad.voltageRaw);
+    }
+
+    void handleKeypad(Shell &shell, const Tokens &tokens)
+    {
+        if (tokens.count == 1)
+        {
+            handleKeypadQuery(shell);
+            return;
+        }
+
+        if (equals(tokens.value[1], "action") || equals(tokens.value[1], "assign"))
+        {
+            if (tokens.count == 3 && equals(tokens.value[2], "list"))
+            {
+                replyList(shell, "keypad_actions", "0:none, 1:mute, 2:volume_up, 3:volume_down, 4:play_pause, 5:next, 6:previous, 7:f13, 8:f14, 9:f15");
+                return;
+            }
+
+            if (tokens.count < 4)
+            {
+                reply(shell, "ERR use: keypad action <0..4> <none|mute|volume_up|volume_down|play_pause|next|previous|f13|f14|f15>");
+                return;
+            }
+
+            uint32_t button = 0;
+            uint8_t actionId = 0;
+            if (!parseU32(tokens.value[2], button) || button >= 5 || !parseKeypadActionId(tokens.value[3], actionId))
+            {
+                reply(shell, "ERR invalid keypad action");
+                return;
+            }
+
+            if (!KeypadPeripheral::setButtonAction(static_cast<uint8_t>(button), actionId))
+            {
+                reply(shell, "ERR keypad missing");
+                return;
+            }
+
+            marker(shell, DeskMarker::KeypadActionUpdated, "keypad.action.updated");
+            replyList(shell, "ok", "keypad.button:%lu, action_id:%u, action:%s",
+                      static_cast<unsigned long>(button),
+                      actionId,
+                      keypadActionName(actionId));
+            return;
+        }
+
+        reply(shell, "ERR use: keypad | keypad action list | keypad action <0..4> <action>");
     }
 
     void handleLightQuery(Shell &shell)
@@ -690,6 +983,8 @@ namespace
         }
 
         persistLightConfig();
+        marker(shell, DeskMarker::LightConfigUpdated, "light.config.updated");
+        logLine(shell, "light: config updated");
         replyList(shell, "ok", "light.updated:done");
     }
 
@@ -700,6 +995,8 @@ namespace
         if (equals(target, "keypad"))
         {
             KeypadPeripheral::hardwareReset();
+            marker(shell, DeskMarker::ResetKeypad, "reset.keypad");
+            logLine(shell, "reset: keypad");
             replyList(shell, "ok", "reset:keypad");
             return;
         }
@@ -707,6 +1004,8 @@ namespace
         if (equals(target, "peripherals") || equals(target, "periferics"))
         {
             KeypadPeripheral::hardwareReset();
+            marker(shell, DeskMarker::ResetKeypad, "reset.peripherals.keypad");
+            logLine(shell, "reset: peripherals");
             replyList(shell, "ok", "reset:peripherals, keypad:done");
             return;
         }
@@ -716,15 +1015,23 @@ namespace
             DeskSettings::resetDefaults();
             DeskSettings::saveNow();
             KeypadPeripheral::syncStripConfig();
+            marker(shell, DeskMarker::ResetSettings, "reset.settings");
+            logLine(shell, "reset: settings defaults");
             replyList(shell, "ok", "reset:settings");
             return;
         }
 
         if (equals(target, "core") || equals(target, "mcu"))
         {
+            marker(shell, DeskMarker::ResetCore, "reset.core");
+            logLine(shell, "reset: core");
             replyList(shell, "ok", "reset:core");
             delay(20);
+#if defined(ARDUINO_ARCH_ESP32)
+            ESP.restart();
+#else
             NVIC_SystemReset();
+#endif
             return;
         }
 
@@ -822,6 +1129,30 @@ namespace DeskShellCommands
             return true;
         }
 
+        if (equals(tokens.value[0], "display?"))
+        {
+            handleDisplayQuery(shell);
+            return true;
+        }
+
+        if (equals(tokens.value[0], "display"))
+        {
+            handleDisplay(shell, tokens);
+            return true;
+        }
+
+        if (equals(tokens.value[0], "wireless?"))
+        {
+            handleWirelessQuery(shell);
+            return true;
+        }
+
+        if (equals(tokens.value[0], "wireless"))
+        {
+            handleWireless(shell, tokens);
+            return true;
+        }
+
         if (equals(tokens.value[0], "sys?") || equals(tokens.value[0], "sys"))
         {
             handleSys(shell, tokens);
@@ -843,6 +1174,12 @@ namespace DeskShellCommands
         if (equals(tokens.value[0], "keypad?"))
         {
             handleKeypadQuery(shell);
+            return true;
+        }
+
+        if (equals(tokens.value[0], "keypad"))
+        {
+            handleKeypad(shell, tokens);
             return true;
         }
 

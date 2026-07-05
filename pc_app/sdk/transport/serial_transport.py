@@ -6,6 +6,7 @@ from time import monotonic
 
 from sdk.config_file import AppConfig
 from sdk.exceptions import DeviceTimeoutError, TransportError
+from sdk.identity import USB_PID, USB_VID
 
 try:
     import serial
@@ -22,8 +23,8 @@ class SerialTransport:
     correct serial port, opens/closes it, and moves text lines.
     """
 
-    VID = 0x1209
-    PID = 0xDB01
+    VID = USB_VID
+    PID = USB_PID
 
     def __init__(
         self,
@@ -96,7 +97,7 @@ class SerialTransport:
                 timeout=self.timeout,
                 write_timeout=self.write_timeout,
             )
-        except serial.SerialException as exc:
+        except serial_exception() as exc:
             raise TransportError(f"Cannot open {selected_port}: {exc}") from exc
 
         self.port = selected_port
@@ -115,7 +116,7 @@ class SerialTransport:
         try:
             port.write(f"{line}\n".encode(self.encoding))
             port.flush()
-        except serial.SerialException as exc:
+        except serial_exception() as exc:
             raise TransportError(f"Serial write failed: {exc}") from exc
 
     def read_line(self, timeout: float | None = None) -> str:
@@ -135,7 +136,7 @@ class SerialTransport:
             try:
                 waiting = port.in_waiting
                 chunk = port.read(waiting or 1)
-            except serial.SerialException as exc:
+            except serial_exception() as exc:
                 raise TransportError(f"Serial read failed: {exc}") from exc
 
             if chunk:
@@ -164,7 +165,7 @@ class SerialTransport:
             try:
                 waiting = port.in_waiting
                 chunk = port.read(waiting or 1)
-            except serial.SerialException as exc:
+            except serial_exception() as exc:
                 raise TransportError(f"Serial read failed: {exc}") from exc
 
             if chunk:
@@ -179,5 +180,11 @@ class SerialTransport:
 
     @staticmethod
     def _require_pyserial() -> None:
-        if serial is None or list_ports is None:
+        if serial is None or list_ports is None or not hasattr(serial, "Serial"):
             raise TransportError("pyserial is required for DeskBridge serial transport.")
+
+
+def serial_exception():
+    if serial is None:
+        return Exception
+    return getattr(serial, "SerialException", Exception)

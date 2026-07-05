@@ -1,0 +1,226 @@
+DeskBridge keypad UART text protocol
+=======================================
+
+The command names, prefixes, line helpers and `KEY=value` parser live in the
+shared `DeskBridgeKeypadProtocol` library at
+`shared_lib/DeskBridgeKeypadProtocol`.
+
+Physical link
+-------------
+
+- CHIP_CORE TX: PB6 -> CHIP_KEYPAD RX: PA10.
+- CHIP_CORE RX: PB7 <- CHIP_KEYPAD TX: PA9.
+- Baud rate: 115200.
+- Format: 8N1.
+- Commands and replies are plain ASCII text lines terminated with LF (`\n`).
+- The event output pin exists, but CHIP_CORE firmware does not use it yet for
+  the first physical test. The strip and capacitive button handling run locally
+  on CHIP_KEYPAD.
+
+Reply format
+------------
+
+```text
+OK
+OK KEY=value KEY=value
+ERR REASON
+```
+
+Core commands
+-------------
+
+| Command | Meaning |
+| --- | --- |
+| `PING` | Link check. Reply: `OK PONG` |
+| `INF?` | Keypad identity. Reply includes `DEV`, `PROTO`, `NAME` |
+| `STR?` | Read strip state and all configurable strip values |
+| `PWR?` | Read current monitor and ADC voltage values |
+| `EVT?` | Read and clear event flags. Reply: `OK EVT=<flags>` |
+| `BTN?` | Read and clear button edge flags |
+| `ACT?` | Read and clear pending callable action. Reply: `OK ACT=<hex>` |
+| `BAL?` | Read available button action list for the current strip mode |
+| `BAS?` | Read current button action assignments |
+| `BSA0,2` | Assign action id 2 to button 0 |
+| `SSE0` / `SSE1` | Strip Set Enabled off/on |
+| `SSM0` / `SSM1` / `SSM2` | Strip Set Mode: cold only, warm only, dual white |
+| `SSV32768` | Strip Set Value/brightness to 32768 |
+| `SSK32768` | Strip Set Kelvin mix to 32768 |
+| `SCN0` | Strip Cold minimum PWM |
+| `SCX65535` | Strip Cold maximum PWM |
+| `SWN0` | Strip Warm minimum PWM |
+| `SWX65535` | Strip Warm maximum PWM |
+| `SBS2048` | Strip Brightness Step |
+| `SKS2048` | Strip Kelvin Step |
+| `SCT600` | Strip Click Time in milliseconds |
+| `SLT600` | Strip Long Time in milliseconds |
+| `SRT40` | Strip Repeat Time in milliseconds |
+| `SCL` | Clear internal event flags |
+| `SRD` | Reset CHIP_KEYPAD runtime defaults |
+
+Event flags
+-----------
+
+`EVT?` returns the pending flags and clears them before replying. Clearing the
+flags drives the event output pin low again, so the next button release creates
+a new rising edge for the CHIP_CORE interrupt input.
+
+| Bit | Flag |
+| --- | --- |
+| 0 | BTN0 click |
+| 1 | BTN1 click |
+| 2 | BTN0 long press |
+| 3 | BTN1 long press |
+| 4 | Brightness changed |
+| 5 | Kelvin changed |
+| 6 | Core command |
+| 7 | BTN0 release |
+| 8 | BTN1 release |
+| 9 | Any button physical pressed/released edge |
+
+Button edge fields
+------------------
+
+`EVT?` includes button edge information and clears it together with the event
+flags:
+
+```text
+OK EVT=512 BP=4 BR=0 BD=4 LB=2 BE=1
+```
+
+`BTN?` returns the same button edge state without the generic event bitfield:
+
+```text
+OK BP=0 BR=4 BD=0 LB=2 BE=2
+```
+
+Fields:
+
+- `BP`: bitmask of buttons that generated PRESSED since the last clear.
+- `BR`: bitmask of buttons that generated RELEASED since the last clear.
+- `BD`: current button-down bitmask.
+- `LB`: last button index that generated an edge, `0..4`; `255` means none.
+- `BE`: last edge type: `0` none, `1` pressed, `2` released.
+
+Both PRESSED and RELEASED raise the event output pin. Reading `EVT?` or `BTN?`
+clears the pending button-edge masks. `EVT?` also clears all generic event
+flags.
+
+`STR?` reply fields
+-------------------
+
+```text
+OK EN=1 MODE=2 VAL=32768 KEL=32768 CMIN=0 CMAX=65535 WMIN=0 WMAX=65535 BSTEP=2048 KSTEP=2048 CT=600 LT=600 RT=40 PWM_C=16384 PWM_W=16384
+```
+
+Fields:
+
+- `EN`: strip enabled.
+- `MODE`: `0` cold only, `1` warm only, `2` dual white.
+- `VAL`: brightness value.
+- `KEL`: kelvin mix value.
+- `CMIN` / `CMAX`: cold channel PWM limits.
+- `WMIN` / `WMAX`: warm channel PWM limits.
+- `BSTEP` / `KSTEP`: local button adjustment steps.
+- `CT` / `LT` / `RT`: click, long-press and repeat timings in ms.
+- `PWM_C` / `PWM_W`: current calculated PWM output values.
+
+`PWR?` reply fields
+-------------------
+
+```text
+OK MA=0 RAW=2048 MV=24000 VRAW=3190 MW=0
+```
+
+Fields:
+
+- `MA`: measured current in milliamps.
+- `RAW`: raw ACS723 ADC value.
+- `MV`: measured supply voltage in millivolts from the voltage divider ADC.
+- `VRAW`: raw voltage divider ADC value.
+- `MW`: calculated absolute strip power in milliwatts.
+
+Current sensor
+--------------
+
+- ADC pin: PA6.
+- Sensor: ACS723 +/-10A.
+- Zero-current output: Vcc / 2, currently calculated as 1650 mV with a 3.3V ADC reference.
+- Nominal sensitivity: 200 mV/A.
+- Formula: `MA = ((ADC_mV - 1650) * 1000) / 200`.
+
+Voltmeter
+---------
+
+- ADC pin: PA7.
+- Divider: Ra=100K, Rb=12K.
+- Divider ratio: `Rb / (Ra + Rb) = 0.107142857`.
+- At ADC 3.3V, the measured top-side maximum is about 30.8V.
+
+Local button behavior
+---------------------
+
+- BTN0 / power-brightness:
+  - Click/release: toggles strip ON/OFF and raises the event output pin.
+  - Long press: adjusts `VAL` brightness by `BSTEP` every `RT` milliseconds.
+  - Long release: inverts the next brightness adjustment direction and raises
+    the event output pin.
+
+- BTN1 / kelvin:
+  - Click/release: no local strip action, but raises the event output pin.
+  - Long press: adjusts `KEL` kelvin mix by `KSTEP` every `RT` milliseconds.
+  - Long release: inverts the next kelvin adjustment direction and raises the
+    event output pin.
+
+The direction is not changed when a limit is reached. It is changed only on the
+long release event, so the next long press moves in the opposite direction.
+
+Programmable button actions
+---------------------------
+
+The keypad has 5 programmable buttons:
+
+```text
+B0=PB12 B1=PB13 B2=PB14 B3=PB15 B4=PA8
+```
+
+Selectable action ids:
+
+| Id | Name | Behavior |
+| --- | --- | --- |
+| `0` | `Strip_PowerBrightness` | Local strip ON/OFF and brightness adjustment |
+| `1` | `Strip_WhiteColor` | Local dual-white kelvin adjustment |
+| `2` | `VolumeMuted` | Callable action for CORE, emits `A001` |
+| `3` | `VolumeUp` | Callable action for CORE, emits `A002` |
+| `4` | `VolumeDown` | Callable action for CORE, emits `A003` |
+
+`BAL?` returns the actions available for the current strip mode. If the strip is
+used as a single normal strip, `Strip_WhiteColor` is not listed. If the strip is
+in dual-white mode, both strip actions are listed. Callable CORE actions are
+available in every strip mode.
+
+`BAS?` returns current assignments:
+
+```text
+OK B0=0 B1=1 B2=2 B3=3 B4=4
+```
+
+`BSA<button>,<action>` assigns an action to a button:
+
+```text
+BSA0,0
+BSA1,1
+BSA2,2
+```
+
+Callable actions are queued until the CORE reads them:
+
+```text
+ACT?
+OK ACT=A002
+```
+
+If there is no pending callable action:
+
+```text
+OK ACT=NONE
+```

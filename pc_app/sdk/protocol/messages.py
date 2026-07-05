@@ -15,6 +15,7 @@ class MessageKind(str, Enum):
     EVENT = "event"
     VALUE = "value"
     PROMPT = "prompt"
+    TUI_NOTIFICATION = "tui_notification"
     UNKNOWN = "unknown"
 
 
@@ -42,9 +43,22 @@ class LogMessage(Message):
 
 
 @dataclass(frozen=True, slots=True)
+class MarkerMessage(Message):
+    code: str
+    text: str
+
+
+@dataclass(frozen=True, slots=True)
 class EventMessage(Message):
     name: str
     args: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class TuiNotificationMessage(Message):
+    code: str
+    summary: str
+    detail: str
 
 
 @dataclass(frozen=True, slots=True)

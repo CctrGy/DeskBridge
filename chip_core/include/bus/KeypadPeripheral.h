@@ -33,8 +33,10 @@ namespace KeypadPeripheral
         uint8_t buttonDownMask = 0;
         uint8_t lastButton = 0xFF;
         uint8_t lastButtonEdge = 0;
+        uint8_t lastButtonEventCode = 0;
+        uint8_t lastActionId = 0;
         uint8_t buttonAssignments[5] = {};
-        char lastAction[9] = {};
+        char lastAction[16] = {};
         bool stripEnabled = false;
         uint8_t stripMode = 0;
         uint16_t brightness = 0;
